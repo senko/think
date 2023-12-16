@@ -1,0 +1,11 @@
+__pycache__/
+.venv/
+.vscode/
+htmlcov/
+dist/
+
+.coverage
+*.code-workspace
+.*_cache
+.env
+*.pyc
