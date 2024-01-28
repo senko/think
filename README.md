@@ -142,5 +142,5 @@ To ensure that your contribution is accepted, please follow these guidelines:
 
 ## Copyright
 
-Copyright (C) 2023. Senko Rasic and Think contributors. You may use and/or distribute
+Copyright (C) 2023-2024. Senko Rasic and Think contributors. You may use and/or distribute
 this project under the terms of MIT license. See the LICENSE file for more details.
