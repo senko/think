@@ -81,7 +81,7 @@ class Claude:
         return prompt
 
     @staticmethod
-    def inject_tools(chat: Chat, tools: list | None) -> Chat:
+    def inject_tools(chat: Chat, tools: Optional[list]) -> Chat:
         """
         Inject tool messages into the chat.
 
@@ -119,8 +119,8 @@ To use a tool, return a message in the following JSON format:
         self,
         chat: Chat,
         max_tokens: int = 1000,
-        tools: list | None = None,
-        parser: Callable | None = None,
+        tools: Optional[list] = None,
+        parser: Optional[Callable] = None,
         max_iterations: int = 5,
     ) -> Optional[str]:
         if parser:

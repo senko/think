@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import Iterator
+from typing import Iterator, Optional
 
 
 class Chat:
@@ -11,7 +11,7 @@ class Chat:
 
     messages: list[dict[str, str]]
 
-    def __init__(self, content: str | None = None):
+    def __init__(self, content: Optional[str] = None):
         """
         Initialize a new conversation.
 
@@ -37,7 +37,7 @@ class Chat:
         dedented_lines = [line[indent:].rstrip() for line in lines]
         return "\n".join(line for line in dedented_lines)
 
-    def add(self, role: str, content: str, name: str | None = None) -> "Chat":
+    def add(self, role: str, content: str, name: Optional[str] = None) -> "Chat":
         """
         Add a message to the conversation.
 
@@ -66,7 +66,7 @@ class Chat:
         self.messages.append(message)
         return self
 
-    def system(self, content: str, name: str | None = None) -> "Chat":
+    def system(self, content: str, name: Optional[str] = None) -> "Chat":
         """
         Add a system message to the conversation.
 
@@ -79,7 +79,7 @@ class Chat:
         """
         return self.add("system", content, name)
 
-    def user(self, content: str, name: str | None = None) -> "Chat":
+    def user(self, content: str, name: Optional[str] = None) -> "Chat":
         """
         Add a user message to the conversation.
 
@@ -89,7 +89,7 @@ class Chat:
         """
         return self.add("user", content, name)
 
-    def assistant(self, content: str, name: str | None = None) -> "Chat":
+    def assistant(self, content: str, name: Optional[str] = None) -> "Chat":
         """
         Add an assistant message to the conversation.
 
@@ -99,7 +99,7 @@ class Chat:
         """
         return self.add("assistant", content, name)
 
-    def function(self, content: str, name: str | None = None) -> "Chat":
+    def function(self, content: str, name: Optional[str] = None) -> "Chat":
         """
         Add a function (tool) response to the conversation.
 
@@ -143,7 +143,7 @@ class Chat:
         child.messages = [deepcopy(msg) for msg in self.messages[index:]]
         return child
 
-    def last(self) -> dict[str, str] | None:
+    def last(self) -> Optional[dict[str, str]]:
         """
         Get the last message in the conversation.
 

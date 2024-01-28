@@ -1,5 +1,5 @@
 from pydantic import Field, create_model, ValidationError
-from typing import Callable
+from typing import Callable, Union
 import re
 import inspect
 import json
@@ -91,7 +91,7 @@ def create_pydantic_model_from_function(fn: Callable) -> type:
     return model
 
 
-def tool(fn: Callable | str) -> Callable:
+def tool(fn: Union[Callable, str]) -> Callable:
     """
     Decorator to mark a function as a tool
 
