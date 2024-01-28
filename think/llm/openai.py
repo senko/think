@@ -1,7 +1,7 @@
 from logging import getLogger
 from os import getenv
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 from openai import OpenAI, OpenAIError
 from openai.types.chat import ChatCompletion
@@ -32,7 +32,7 @@ class ChatGPT:
 
     def __init__(
         self,
-        api_key: str | None = None,
+        api_key: Optional[str] = None,
         model: str = "gpt-4-1106-preview",
         temperature: float = 0.7,
         timeout: int = 120.0,
@@ -99,7 +99,7 @@ class ChatGPT:
     def _call_chatgpt(
         self,
         messages: list[dict[str, str]],
-        tools: list | None = None,
+        tools: Optional[list] = None,
     ) -> ChatCompletion:
         try:
             log.debug(f"Calling ChatGPT with messages: {messages})")
@@ -127,10 +127,10 @@ class ChatGPT:
     def __call__(
         self,
         chat: Chat,
-        tools: list | None = None,
-        parser: Callable | None = None,
+        tools: Optional[list] = None,
+        parser: Optional[Callable] = None,
         max_iterations: int = 5,
-    ) -> str | None:
+    ) -> Optional[str]:
         chat = chat.fork()
 
         for i in range(max_iterations):

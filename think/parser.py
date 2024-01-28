@@ -1,6 +1,7 @@
 from enum import Enum
 import json
 import re
+from typing import Union, Optional
 
 from pydantic import BaseModel
 
@@ -67,7 +68,7 @@ class CodeBlockParser(MultiCodeBlockParser):
 
 
 class JSONParser:
-    def __init__(self, spec: BaseModel | None = None, strict: bool = True):
+    def __init__(self, spec: Optional[BaseModel] = None, strict: bool = True):
         self.spec = spec
         self.strict = strict or (spec is not None)
 
@@ -75,7 +76,7 @@ class JSONParser:
     def schema(self):
         return self.spec.model_json_schema() if self.spec else None
 
-    def __call__(self, text: str) -> BaseModel | dict | None:
+    def __call__(self, text: str) -> Union[BaseModel, dict, None]:
         text = text.strip()
         if text.startswith("```"):
             try:
