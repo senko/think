@@ -8,7 +8,7 @@ from think.chat import Chat
 def test_chatgpt_valid_api_key_and_default_values():
     chat_gpt = ChatGPT("key")
     assert chat_gpt.api_key == "key"
-    assert chat_gpt.model == "gpt-4-1106-preview"
+    assert chat_gpt.model == "gpt-4-turbo-preview"
     assert chat_gpt.temperature == 0.7
 
 
@@ -97,7 +97,7 @@ def test_call_chatgpt_no_functions():
 
     assert result == "hello"
     chatgpt.client.chat.completions.create.assert_called_once_with(
-        model="gpt-4-1106-preview",
+        model="gpt-4-turbo-preview",
         temperature=0.7,
         messages=[{"content": "Hello!"}],
     )
@@ -121,7 +121,7 @@ def test_call_chatgpt_with_functions():
 
     assert result == "hello"
     chatgpt.client.chat.completions.create.assert_called_once_with(
-        model="gpt-4-1106-preview",
+        model="gpt-4-turbo-preview",
         temperature=0.7,
         messages=[{"content": "Hello!"}],
         functions=[tool._get_json_schema.return_value],

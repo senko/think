@@ -26,14 +26,16 @@ class ChatGPT:
         "gpt-3.5-turbo-16k",
         "gpt-4",
         "gpt-4-32k",
+        "gpt-4-turbo-preview",
         "gpt-4-1106-preview",
         "gpt-4-vision-preview",
+        "gpt-4-0125-preview",
     ]
 
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gpt-4-1106-preview",
+        model: str = "gpt-4-turbo-preview",
         temperature: float = 0.7,
         timeout: int = 120.0,
         max_retries: int = 3,
