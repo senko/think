@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "think-llm"
-version = "0.0.4"
+version = "0.0.5"
 description = "Create programs that think, using LLMs."
 authors = ["Senko Rasic <senko@senko.net>"]
 license = "MIT"
