@@ -41,7 +41,8 @@ pytest-cov = "^4.1.0"
 examples = ["rich", "click"]
 
 [tool.pytest.ini_options]
-addopts = "-ra -q --cov=think"
+# addopts = "-ra -q --cov=think"
+addopts = "-ra -q"
 pythonpath = ["."]
 
 [tool.coverage.report]
