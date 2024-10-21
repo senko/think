@@ -1,8 +1,7 @@
 import pytest
-
 from jinja2 import UndefinedError
 
-from think.prompt import FormatTemplate, JinjaStringTemplate, JinjaFileTemplate
+from think.prompt import FormatTemplate, JinjaFileTemplate, JinjaStringTemplate
 
 
 def test_format_template():
@@ -27,10 +26,7 @@ def test_jinja_string_template():
     {% endif %}
     """
 
-    expected_output = """
-    hello <world>,
-    you are 4.54 bn years old
-    """
+    expected_output = "hello <world>,\nyou are 4.54 bn years old\n"
 
     assert template(test_template, name="world", age=4.54) == expected_output
 

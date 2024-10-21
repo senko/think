@@ -1,10 +1,10 @@
 from enum import Enum
 from typing import Tuple
 
-from pydantic import BaseModel, field_validator
 import pytest
+from pydantic import BaseModel, field_validator
 
-from think.parser import MultiCodeBlockParser, CodeBlockParser, JSONParser, EnumParser
+from think.parser import CodeBlockParser, EnumParser, JSONParser, MultiCodeBlockParser
 
 
 @pytest.mark.parametrize(
@@ -64,7 +64,7 @@ def test_code_block_parser(input, expected):
 )
 def test_parse_json_no_spec(input, strict, expected):
     parser = JSONParser(strict=strict)
-    if expected == ValueError:
+    if expected is ValueError:
         with pytest.raises(ValueError):
             parser(input)
     else:

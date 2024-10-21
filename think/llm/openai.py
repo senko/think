@@ -1,165 +1,423 @@
+import json
 from logging import getLogger
-from os import getenv
-import time
-from typing import Callable, Optional
+from time import time
+from typing import Any, AsyncGenerator, Callable
 
-from openai import OpenAI, OpenAIError
-from openai.types.chat import ChatCompletion
+from pydantic import BaseModel
 
-from ..chat import Chat
+try:
+    from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream
+    from openai.types.chat import ChatCompletionChunk
+
+except ImportError as err:
+    raise ImportError(
+        "OpenAI client requires the OpenAI Python SDK: pip install openai"
+    ) from err
+
+from .base import LLM, CustomParserResultT, PydanticResultT
+from .chat import Chat, ContentPart, ContentType, Message, Role
+from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class ToolError(Exception):
-    def __init__(self, message: str):
-        self.message = message
+class OpenAIAdapter:
+    toolkit: ToolKit
+
+    def __init__(self, toolkit: ToolKit | None = None):
+        self.toolkit = toolkit
+
+    def get_tool_spec(self, tool: ToolDefinition) -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "arguments": tool.schema,
+            },
+        }
+
+    @property
+    def spec(self) -> list[dict] | None:
+        if self.toolkit is None:
+            return NOT_GIVEN
+
+        return self.toolkit.generate_tool_spec(self.get_tool_spec)
+
+    def dump_message(self, message: Message) -> list[dict]:
+        tool_calls = []
+        tool_responses = {}
+        text_parts = []
+        image_parts = []
+
+        for part in message.content:
+            match part:
+                case ContentPart(type=ContentType.tool_call, tool_call=tool_call):
+                    tool_calls.append(
+                        dict(
+                            id=tool_call.id,
+                            type="function",
+                            function=dict(
+                                name=tool_call.name,
+                                arguments=json.dumps(tool_call.arguments),
+                            ),
+                        )
+                    )
+                case ContentPart(
+                    type=ContentType.tool_response, tool_response=tool_response
+                ):
+                    tool_responses[tool_response.call.id] = tool_response.response
+                case ContentPart(type=ContentType.text, text=text):
+                    text_parts.append(
+                        dict(
+                            type="text",
+                            text=text,
+                        )
+                    )
+                case ContentPart(type=ContentType.image, image=image):
+                    image_parts.append(
+                        dict(
+                            type="image_url",
+                            image_url=dict(url=image),
+                        )
+                    )
+
+        if tool_responses:
+            return [
+                dict(
+                    role="tool",
+                    tool_call_id=call_id,
+                    content=response,
+                )
+                for call_id, response in tool_responses.items()
+            ]
+
+        if tool_calls or message.role == Role.assistant:
+            if len(text_parts) == 1:
+                text_parts = text_parts[0]["text"]
+            return [
+                dict(
+                    role="assistant",
+                    content=text_parts or None,
+                    tool_calls=tool_calls,
+                )
+            ]
+
+        if message.role == Role.system:
+            if len(text_parts) == 1:
+                text_parts = text_parts[0]["text"]
+            return [dict(role="system", content=text_parts)]
+
+        if message.role == Role.user:
+            content = text_parts + image_parts
+            if len(content) == 1 and content[0]["type"] == "text":
+                content = content[0]["text"]
+            return [
+                dict(
+                    role="user",
+                    content=content,
+                )
+            ]
+
+        raise ValueError(f"Unsupported message role: {message.role}")
+
+    @staticmethod
+    def text_content(
+        content: str | list[dict[str, str]],
+    ) -> str | None:
+        if content is None:
+            return None
+
+        if isinstance(content, str):
+            return content
+        else:
+            return "".join(part.get("text", "") for part in content)
+
+    def parse_tool_call(self, message: dict[str, Any]) -> Message:
+        tool_call_id = message.get("tool_call_id")
+        if tool_call_id is None:
+            raise ValueError("Missing tool_call_id in tool message: %r", message)
+
+        text = self.text_content(message.get("content"))
+
+        return Message(
+            role=Role.tool,
+            content=[
+                ContentPart(
+                    type=ContentType.tool_response,
+                    tool_response=ToolResponse(
+                        call=ToolCall(
+                            id=tool_call_id,
+                            name="",
+                            arguments={},
+                        ),
+                        response=text,
+                    ),
+                )
+            ],
+        )
+
+    def parse_assistant_message(self, message: dict[str, Any]) -> Message:
+        raw_tool_calls = message.get("tool_calls")
+        tool_calls = []
+        if raw_tool_calls:
+            for tc in raw_tool_calls:
+                call_id = tc.get("id")
+                if call_id is None:
+                    raise ValueError(
+                        "Missing tool call ID in assistant message: %r", tc
+                    )
+                name = tc.get("function", {}).get("name")
+                if name is None:
+                    raise ValueError(
+                        "Missing function name in assistant message: %r", tc
+                    )
+                arguments = tc.get("function", {}).get("arguments")
+                if arguments is None:
+                    raise ValueError(
+                        "Missing function arguments in assistant message: %r", tc
+                    )
+
+                tool_calls.append(
+                    ContentPart(
+                        type=ContentType.tool_call,
+                        tool_call=ToolCall(
+                            id=call_id,
+                            name=name,
+                            arguments=json.loads(arguments),
+                        ),
+                    )
+                )
+
+        text = self.text_content(message.get("content"))
+        parts = []
+        if text:
+            parts.append(
+                ContentPart(
+                    type=ContentType.text,
+                    text=text or "",
+                )
+            )
+
+        return Message(
+            role=Role.assistant,
+            content=parts + tool_calls,
+        )
+
+    def parse_message(self, message: dict[str, Any]) -> Message:
+        role = message.get("role", "user")
+        if role == "tool":
+            return self.parse_tool_call(message)
+
+        elif role == "assistant":
+            return self.parse_assistant_message(message)
+
+        elif role == "system":
+            text = self.text_content(message.get("content"))
+            return Message.system(text)
+
+        elif role == "user":
+            raw_content = message.get("content")
+            if raw_content is None:
+                raise ValueError("Missing content in user message: %r", message)
+
+            content: list[ContentPart] = []
+            if isinstance(raw_content, str):
+                content.append(
+                    ContentPart(
+                        type=ContentType.text,
+                        text=raw_content,
+                    )
+                )
+            else:
+                for part in raw_content:
+                    part_type = part.get("type")
+                    if part_type == "text":
+                        content.append(
+                            ContentPart(
+                                type=ContentType.text,
+                                text=part.get("text"),
+                            )
+                        )
+                    elif part_type == "image_url":
+                        content.append(
+                            ContentPart(
+                                type=ContentType.image,
+                                image=part.get("image_url", {}).get("url"),
+                            )
+                        )
+                    else:
+                        raise ValueError(f"Unsupported content part type: {part_type}")
+
+            return Message(role=Role.user, content=content)
+
+        raise ValueError(f"Unsupported message type: {type(message)}")
+
+    def dump_chat(self, chat: Chat) -> list[dict]:
+        messages = []
+        for m in chat.messages:
+            messages.extend(self.dump_message(m))
+        return messages
+
+    def load_chat(self, messages: list[dict]) -> Chat:
+        c = Chat()
+        for m in messages:
+            c.messages.append(self.parse_message(m))
+        return c
 
 
-class ChatGPT:
-    """
-    Client for OpenAI ChatGPT API.
-    """
-
-    MODELS = [
-        "gpt-3.5-turbo",
-        "gpt-3.5-turbo-16k",
-        "gpt-4",
-        "gpt-4-32k",
-        "gpt-4-turbo-preview",
-        "gpt-4-1106-preview",
-        "gpt-4-vision-preview",
-        "gpt-4-0125-preview",
-    ]
+class OpenAIClient(LLM):
+    provider = "openai"
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = "gpt-4-turbo-preview",
-        temperature: float = 0.7,
-        timeout: int = 120.0,
-        max_retries: int = 3,
+        model: str,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
     ):
-        """
-        Create a new ChatGPT client instance.
+        super().__init__(model, api_key=api_key, base_url=base_url)
+        self.client = AsyncOpenAI(api_key=api_key)
 
-        :param api_key: OpenAI API key (default: use from OPENAI_API_KEY env var).
-        :param model: Model to use (default: gpt-3.5-turbo).
-        :param temperature: Temperature parameter (default: 0.7).
-        :param timeout: Timeout for API requests (default: 120.0).
-        :param max_retries: Maximum number of retries for API requests (default: 3).
-        """
-        if api_key is None:
-            api_key = getenv("OPENAI_API_KEY")
-
-        if not api_key:
-            raise ValueError("OpenAI API key is not set")
-
-        if model not in self.MODELS:
-            raise ValueError(
-                f"Unsupported model: {model} (supported: {','.join(self.MODELS)})"
-            )
-
-        self.client = OpenAI(api_key=api_key, timeout=timeout, max_retries=max_retries)
-        self.api_key = api_key
-        self.model = model
-        self.temperature = temperature
-
-    def _run_tool(
-        self,
-        function_call,
-        tools,
-    ):
-        assert tools, "Tools should not be empty/missing at this point"
-
-        function_name = function_call.name
-
-        available_tools = {t.__name__: t for t in tools}
-        available_tool_list = ",".join(available_tools.keys())
-        if function_name not in available_tools:
-            log.warning(
-                f"GPT requested unknown tool: {function_name}; available tools: {available_tool_list}"
-            )
-            return f"ERROR: Unknown tool: {function_name}; available tools: {available_tool_list}"
-
-        t = available_tools[function_name]
-        try:
-            args = t._validate_arguments(function_call.arguments)
-        except TypeError as err:
-            log.warning(
-                f"Invalid arguments for GPT tool {function_name}: {err}", exc_info=True
-            )
-            return f"ERROR: {err}"
-
-        try:
-            log.debug(f"Running GPT tool {function_name} with args: {args}")
-            return t(**args)
-        except Exception as err:
-            log.warning(f"Error running GPT tool {function_name}: {err}", exc_info=True)
-            raise ToolError(f"Error running GPT tool {function_name}: {err}") from err
-
-    def _call_chatgpt(
-        self,
-        messages: list[dict[str, str]],
-        tools: Optional[list] = None,
-    ) -> ChatCompletion:
-        try:
-            log.debug(f"Calling ChatGPT with messages: {messages})")
-            api_kwargs = dict(
-                model=self.model,
-                temperature=self.temperature,
-                messages=messages,
-            )
-            if tools:
-                functions = [t._get_json_schema() for t in tools]
-                api_kwargs["functions"] = functions
-                api_kwargs["function_call"] = "auto"
-
-            t0 = time.time()
-            api_result = self.client.chat.completions.create(**api_kwargs)
-            t1 = time.time()
-            log.debug(
-                f"ChatGPT request completed in {t1 - t0:.2f}s, {api_result.usage.total_tokens} tokens used"
-            )
-            return api_result.choices[0].message
-        except OpenAIError as err:
-            log.warning(f"Error calling ChatGPT: {err}", exc_info=True)
-            raise
-
-    def __call__(
+    async def __call__(
         self,
         chat: Chat,
-        tools: Optional[list] = None,
-        parser: Optional[Callable] = None,
-        max_iterations: int = 5,
-    ) -> Optional[str]:
-        chat = chat.fork()
+        *,
+        parser: type[PydanticResultT]
+        | Callable[[str], CustomParserResultT]
+        | None = None,
+        temperature: float | None = None,
+        tools: ToolKit | list[Callable] | None = None,
+        max_retries: int = 3,
+        max_steps: int = 5,
+        max_tokens: int | None = None,
+    ) -> str | PydanticResultT | CustomParserResultT:
+        toolkit = self._get_toolkit(tools)
 
-        for i in range(max_iterations):
-            response = self._call_chatgpt(list(chat), tools)
-            if response.function_call:
-                chat.assistant(f"Using tool '{response.function_call.name}'")
-                try:
-                    result = self._run_tool(response.function_call, tools)
-                except ToolError as err:
-                    print(repr(err.__cause__), type(err.__cause__))
-                    raise err.__cause__
-                chat.function(result, name=response.function_call.name)
+        if isinstance(parser, type) and issubclass(parser, BaseModel):
+            response_format = parser
+        else:
+            response_format = None
+
+        adapter = OpenAIAdapter(toolkit)
+        messages = adapter.dump_chat(chat)
+        tools_dbg = f" and tools {{{toolkit.tool_names}}}" if toolkit else ""
+        t0 = time()
+        if response_format:
+            log.debug(
+                f"Making a {self.model} call with messages: {messages}{tools_dbg}"
+                f"expecting {response_format.__name__} response"
+            )
+            response = await self.client.beta.chat.completions.parse(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                tools=adapter.spec,
+                response_format=response_format,
+                max_completion_tokens=max_tokens or NOT_GIVEN,
+            )
+        else:
+            log.debug(
+                f"Making a {self.model} call with messages: {messages}{tools_dbg}"
+            )
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                tools=adapter.spec,
+                max_completion_tokens=max_tokens or NOT_GIVEN,
+            )
+
+        t1 = time()
+        log.debug(
+            f"Received response in {(t1 - t0):.1f}s: {response.choices[0].message}"
+        )
+
+        message = adapter.parse_message(response.choices[0].message.model_dump())
+        text, response_list = await self._process_message(chat, message, toolkit)
+
+        if response_list:
+            if max_steps < 1:
+                log.warning("Tool call steps limit reached, stopping")
+            else:
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_retries=max_retries,
+                    max_steps=max_steps - 1,
+                    max_tokens=max_tokens,
+                )
+
+        if response_format and response.choices[0].message.parsed:
+            return response.choices[0].message.parsed
+
+        if parser:
+            try:
+                return parser(text)
+            except ValueError as err:
+                log.debug(f"Error parsing response '{text}': {err}")
+                if not max_retries:
+                    raise
+
+                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
+                chat.user(error_text)
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_retries=max_retries - 1,
+                    max_steps=max_steps,
+                    max_tokens=max_tokens,
+                )
+
+        return text
+
+    async def stream(
+        self,
+        chat: Chat,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[str, None]:
+        adapter = OpenAIAdapter()
+        messages = adapter.dump_chat()
+        log.debug(f"Making a {self.model} stream call with messages: {messages}")
+        stream: AsyncStream[
+            ChatCompletionChunk
+        ] = await self.client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=temperature,
+            stream=True,
+            max_completion_tokens=max_tokens or NOT_GIVEN,
+        )
+        text = ""
+        async for chunk in stream:
+            if not chunk.choices:
                 continue
 
-            if parser:
-                try:
-                    content = parser(response.content)
-                except ValueError as err:
-                    log.debug(f"Error parsing GPT response: {err}", exc_info=True)
-                    chat.assistant(response.content)
-                    chat.user(
-                        f"Error parsing response: {err}. Please output your response EXACTLY as requested."
-                    )
-                    continue
+            choice = chunk.choices[0]
+            delta = choice.delta
+
+            if delta.content is not None:
+                text += delta.content
+                yield delta.content
+            elif choice.finish_reason == "stop":
+                pass  # ignore
             else:
-                content = response.content
+                log.debug("OpenAIClient.stream(): ignoring unknown chunk %r", chunk)
 
-            return content
-
-        return None
+        if text:
+            chat.messages.append(
+                Message(
+                    role=Role.assistant,
+                    content=[
+                        ContentPart(
+                            type=ContentType.text,
+                            text=text,
+                        )
+                    ],
+                )
+            )
