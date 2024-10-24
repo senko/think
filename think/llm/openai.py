@@ -1,12 +1,11 @@
 import json
-from base64 import b64encode
 from logging import getLogger
 from typing import Any, AsyncGenerator, Callable
 
 from pydantic import BaseModel
 
 try:
-    from openai import AsyncOpenAI, AsyncStream
+    from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream
     from openai.types.chat import ChatCompletionChunk
     from openai.types.chat.chat_completion_message import ChatCompletionMessage
 
@@ -24,10 +23,10 @@ log = getLogger(__name__)
 
 class OpenAIMessageAdapter:
     def dump_message(self, message: Message) -> list[dict]:
-        tool_calls: list[dict] = []
-        tool_responses: dict[str, dict] = {}
-        text_parts: list[dict] = []
-        image_parts: list[dict] = []
+        tool_calls = []
+        tool_responses = {}
+        text_parts = []
+        image_parts = []
 
         for part in message.content:
             if part.type == ContentType.tool_call:
@@ -47,20 +46,14 @@ class OpenAIMessageAdapter:
                 text_parts.append(
                     dict(
                         type="text",
-                        content=part.text,
+                        text=part.text,
                     )
                 )
             elif part.type == ContentType.image:
-                if isinstance(part.image, str):
-                    image_url = dict(url=part.image)
-                else:
-                    mime_type = part.get_image_mime_type()
-                    encoded_image = b64encode(part.image).decode("ascii")
-                    image_url = dict(url=f"data:{mime_type}base64,{encoded_image}")
                 image_parts.append(
                     dict(
                         type="image_url",
-                        image_url=image_url,
+                        image_url=dict(url=part.image),
                     )
                 )
 
@@ -76,7 +69,7 @@ class OpenAIMessageAdapter:
 
         if tool_calls or message.role == Role.assistant:
             if len(text_parts) == 1:
-                text_parts = text_parts[0]["content"]
+                text_parts = text_parts[0]["text"]
             return [
                 dict(
                     role="assistant",
@@ -87,13 +80,13 @@ class OpenAIMessageAdapter:
 
         if message.role == Role.system:
             if len(text_parts) == 1:
-                text_parts = text_parts[0]["content"]
+                text_parts = text_parts[0]["text"]
             return [dict(role="system", content=text_parts)]
 
         if message.role == Role.user:
             content = text_parts + image_parts
             if len(content) == 1 and content[0]["type"] == "text":
-                content = content[0]["content"]
+                content = content[0]["text"]
             return [
                 dict(
                     role="user",
@@ -181,37 +174,6 @@ class OpenAIMessageAdapter:
                 )
             )
 
-        print("TOOL CALLS", tool_calls)
-
-        return Message(
-            role=Role.assistant,
-            content=parts + tool_calls,
-        )
-
-    def parse_completion_result(self, message: ChatCompletionMessage) -> Message:
-        tool_calls = []
-        if message.tool_calls:
-            for tc in message.tool_calls:
-                tool_calls.append(
-                    ContentPart(
-                        type=ContentType.tool_call,
-                        tool_call=ToolCall(
-                            id=tc.id,
-                            name=tc.function.name,
-                            arguments=json.loads(tc.function.arguments),
-                        ),
-                    )
-                )
-        text = self.text_content(message.content)
-        parts = []
-        if text:
-            parts.append(
-                ContentPart(
-                    type=ContentType.text,
-                    text=text or "",
-                )
-            )
-
         return Message(
             role=Role.assistant,
             content=parts + tool_calls,
@@ -219,7 +181,7 @@ class OpenAIMessageAdapter:
 
     def parse_message(self, message: ChatCompletionMessage | dict[str, Any]) -> Message:
         if isinstance(message, ChatCompletionMessage):
-            return self.parse_completion_result(message)
+            message = message.model_dump()
 
         role = message.get("role", "user")
         if role == "tool":
@@ -252,7 +214,7 @@ class OpenAIMessageAdapter:
                         content.append(
                             ContentPart(
                                 type=ContentType.text,
-                                text=part.get("content"),
+                                text=part.get("text"),
                             )
                         )
                     elif part_type == "image_url":
@@ -303,7 +265,7 @@ class OpenAIToolAdapter:
     @property
     def spec(self) -> list[dict] | None:
         if self.toolkit is None:
-            return None
+            return NOT_GIVEN
 
         return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
@@ -345,10 +307,9 @@ class OpenAIClient(LLM):
             response_format = None
 
         adapter = OpenAIMessageAdapter()
-        tool_adapter = OpenAIToolAdapter(toolkit) if toolkit else None
+        tool_adapter = OpenAIToolAdapter(toolkit)
         messages = adapter.dump_chat(chat)
-        print("MESSAGES", messages)
-        print("TOOLS", tool_adapter.spec)
+        print("SENDING MESSAGES", messages)
         if response_format:
             response = await self.client.beta.chat.completions.parse(
                 model=self.model,
@@ -365,14 +326,16 @@ class OpenAIClient(LLM):
                 tools=tool_adapter.spec,
             )
 
+        print("GOT RESPONSE", response)
+
         # TODO: Record response timings and potentially other metadata here
 
         text = ""
         response_list: list[ToolResponse] = []
 
+        print("TO PARSE", response.choices[0].message)
         message = adapter.parse_message(response.choices[0].message)
 
-        print("PARSED MESSAGE", message)
         chat.messages.append(message)
 
         # FIXME: this is the same as for anthropic
@@ -382,7 +345,6 @@ class OpenAIClient(LLM):
                 text += part.text
             elif part.type == ContentType.tool_call:
                 tool_response = await toolkit.execute_tool_call(part.tool_call)
-                print("TOOL RESPONSE", tool_response)
                 response_list.append(tool_response)
 
         # Maybe we don't actually need a single message with multiple responses?
@@ -408,8 +370,8 @@ class OpenAIClient(LLM):
                 max_retries=max_retries,
             )
 
-        if response_format and message.parsed:
-            return message.parsed
+        if response_format and response.choices[0].message.parsed:
+            return response.choices[0].message.parsed
 
         if parser:
             try:

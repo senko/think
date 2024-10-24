@@ -17,6 +17,9 @@ from anthropic.types import (
     ToolResultBlockParam,
     ToolUseBlockParam,
 )
+from anthropic.types import (
+    Message as AnthropicMessage,
+)
 from anthropic.types.image_block_param import Source
 from pydantic import BaseModel
 
@@ -44,29 +47,30 @@ class AnthropicMessageAdapter:
         else:
             return "assistant"
 
-    def dump_content_part(self, part: ContentPart) -> AnthropicContentPart:
+    def dump_content_part(self, part: ContentPart) -> dict:
         if part.type == ContentType.text:
-            return TextBlockParam(
+            return dict(
                 type="text",
                 text=part.text,
             )
         elif part.type == ContentType.image:
-            return ImageBlockParam(
+            return dict(
                 type="image",
                 source=Source(
-                    url=b64encode(part.get_image_data()).decode("ascii"),
-                    media_type=part.get_image_mime_type(),
+                    type="base64",
+                    data=part.image_data,
+                    media_type=part.image_mime_type,
                 ),
             )
         elif part.type == ContentType.tool_call:
-            return ToolUseBlockParam(
+            return dict(
                 type="tool_use",
                 id=part.tool_call.id,
                 name=part.tool_call.name,
                 input=part.tool_call.arguments,
             )
         elif part.type == ContentType.tool_response:
-            return ToolResultBlockParam(
+            return dict(
                 type="tool_result",
                 tool_use_id=part.tool_response.call.id,
                 content=part.tool_response.response,
@@ -74,65 +78,62 @@ class AnthropicMessageAdapter:
         else:
             raise ValueError(f"Unknown content type: {part.type}")
 
-    def is_text(self, part: AnthropicContentPart) -> TypeGuard[TextBlockParam]:
-        return part.type == "text"
+    def parse_content_part(self, part: dict) -> ContentPart:
+        match part:
+            case {"type": "text", "text": text}:
+                return ContentPart(type=ContentType.text, text=text)
+            case {"type": "image", "source": {"data": data}}:
+                return ContentPart(
+                    type=ContentType.image,
+                    image=b64decode(data.encode("ascii")),
+                )
+            case {"type": "tool_use", "id": id, "name": name, "input": input}:
+                return ContentPart(
+                    type=ContentType.tool_call,
+                    tool_call=ToolCall(id=id, name=name, arguments=input),
+                )
+            case {"type": "tool_result", "tool_use_id": id, "content": content}:
+                return ContentPart(
+                    type=ContentType.tool_response,
+                    tool_response=ToolResponse(
+                        call=ToolCall(id=id, name="", arguments={}),
+                        response=content,
+                    ),
+                )
+            case _:
+                raise ValueError(f"Unknown content type: {part.type}")
 
-    def is_image(self, part: AnthropicContentPart) -> TypeGuard[ImageBlockParam]:
-        return part.type == "image"
-
-    def is_tool_use(self, part: AnthropicContentPart) -> TypeGuard[ToolUseBlockParam]:
-        return part.type == "tool_use"
-
-    def is_tool_result(
-        self,
-        part: AnthropicContentPart,
-    ) -> TypeGuard[ToolResultBlockParam]:
-        return part.type == "tool_result"
-
-    def parse_content_part(self, part: AnthropicContentPart) -> ContentPart:
-        if self.is_text(part):
-            return ContentPart(type=ContentType.text, text=part.text)
-        elif self.is_image(part):
-            return ContentPart(
-                type=ContentType.image,
-                image=b64decode(part.source.data.encode("ascii")),
-            )
-        elif self.is_tool_use(part):
-            return ContentPart(
-                type=ContentType.tool_call,
-                tool_call=ToolCall(id=part.id, name=part.name, arguments=part.input),
-            )
-        elif self.is_tool_result(part):
-            return ContentPart(
-                type=ContentType.tool_response,
-                tool_response=ToolResponse(
-                    call=ToolCall(id=part.id, name=None, arguments=None),
-                    response=part.content,
-                ),
-            )
-        else:
-            raise ValueError(f"Unknown content type: {part.type}")
-
-    def dump_message(self, message: Message) -> MessageParam:
+    def dump_message(self, message: Message) -> dict:
         if len(message.content) == 1 and message.content[0].type == ContentType.text:
             content = message.content[0].text
         else:
             content = [self.dump_content_part(part) for part in message.content]
 
-        return MessageParam(
+        return dict(
             role=self.dump_role(message.role),
             content=content,
         )
 
-    def parse_message(self, message: MessageParam) -> Message:
-        role = Role.assistant if message.role == "assistant" else Role.user
-        if isinstance(message.content, str):
-            return Message.create(role=role, text=message.content)
+    def parse_message(self, message: dict | AnthropicMessage) -> Message:
+        if isinstance(message, AnthropicMessage):
+            message = message.model_dump()
 
-        content = [self.parse_content_part(part) for part in message.content]
-        return Message(role=role, content=content)
+        role = Role.assistant if message.get("role") == "assistant" else Role.user
+        content = message.get("content")
+        if isinstance(content, str):
+            return Message(
+                role=role,
+                content=[
+                    ContentPart(type=ContentType.text, text=content),
+                ],
+            )
 
-    def dump_chat(self, chat: Chat) -> tuple[str, list[MessageParam]]:
+        parts = [self.parse_content_part(part) for part in content]
+        if any(part.type == ContentType.tool_response for part in parts):
+            role = Role.tool
+        return Message(role=role, content=parts)
+
+    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
         system_messages = []
         other_messages = []
         offset = 0
@@ -152,6 +153,12 @@ class AnthropicMessageAdapter:
         system_message = "\n\n".join(system_messages) if system_messages else NOT_GIVEN
         return system_message, other_messages
 
+    def load_chat(self, messages: list[dict], system: str | None = None) -> Chat:
+        c = Chat(system)
+        for m in messages:
+            c.messages.append(self.parse_message(m))
+        return c
+
 
 class AnthropicToolAdapter:
     toolkit: ToolKit
@@ -169,9 +176,9 @@ class AnthropicToolAdapter:
     @property
     def spec(self) -> list[dict] | None:
         if self.toolkit is None:
-            return None
+            return NOT_GIVEN
 
-        return [self.get_tool_spec(tool) for tool in self.toolkit.tools.values()]
+        return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
 
 class AnthropicClient(LLM):
@@ -206,11 +213,11 @@ class AnthropicClient(LLM):
             toolkit = None
 
         adapter = AnthropicMessageAdapter()
-        tool_adapter = AnthropicToolAdapter(toolkit) if toolkit else None
+        tool_adapter = AnthropicToolAdapter(toolkit)
         system_message, messages = adapter.dump_chat(chat)
-        print("TOOLS", toolkit.tool_schemas if toolkit else None)
+        print("TOOLS", tool_adapter.spec)
         print("MESSAGES", system_message, messages)
-        message: Message = await self.client.messages.create(
+        message: AnthropicMessage = await self.client.messages.create(
             model=self.model,
             messages=messages,
             temperature=temperature,
@@ -219,6 +226,10 @@ class AnthropicClient(LLM):
             max_tokens=4096,  # FIXME
         )
 
+        # fixme
+        import json
+
+        message = message.model_dump()
         # TODO: Record response timings and potentially other metadata here
 
         text = ""
@@ -321,4 +332,9 @@ class AnthropicClient(LLM):
                 log.debug("OpenAIClient.stream(): ignoring unknown chunk %r", event)
 
         if text:
-            chat.messages.append(Message.create(Role.assistant, text=text))
+            chat.messages.append(
+                Message.create(
+                    Role.assistant,
+                    content=[ContentPart(type=ContentType.text, text=text)],
+                )
+            )

@@ -5,7 +5,7 @@ from mimetypes import guess_type
 from typing import Any, Literal
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .tool import ToolCall, ToolResponse
 
@@ -33,47 +33,58 @@ class ContentType(str, Enum):
 class ContentPart(BaseModel):
     type: ContentType
     text: str | None = None
-    image: str | bytes | None = None
+    image: str | None = None
     tool_call: ToolCall | None = None
     tool_response: ToolResponse | None = None
 
-    def get_image_data(self) -> bytes | None:
+    @field_validator("image", mode="before")
+    @classmethod
+    def validate_image(cls, v):
+        if not v:
+            return None
+
+        if isinstance(v, str):
+            for scheme in ["data", "http", "https"]:
+                if v.startswith(f"{scheme}:"):
+                    return v
+            raise ValueError("Image should be a data or HTTP(S) URL")
+
+        if not isinstance(v, bytes):
+            raise ValueError("Image should be a string (URL) or bytes (raw image data)")
+
+        for typ, magic in MAGIC_BYTES.items():
+            if v.startswith(magic):
+                mime_type = typ
+                break
+        else:
+            raise ValueError("Unsupported image format")
+
+        return f"data:{mime_type};base64,{b64encode(v).decode('ascii')}"
+
+    @property
+    def image_data(self) -> str | None:
         if not self.image:
             return None
 
-        if isinstance(self.image, bytes):
-            return self.image
-
-        if isinstance(self.image, str):
-            if self.image.startswith("data:"):
-                try:
-                    return b64decode(self.image.split(",")[1])
-                except Exception:
-                    return None
+        if self.image.startswith("data:"):
+            return self.image.split(",", 1)[1]
 
         return None
 
-    def get_image_mime_type(self) -> str | None:
+    @property
+    def image_mime_type(self) -> str | None:
         if not self.image:
             return None
 
-        if isinstance(self.image, bytes):
-            # Try to detect image type based off the first few magic bytes
-            for mime_type, magic_bytes in MAGIC_BYTES.items():
-                if self.image.startswith(magic_bytes):
-                    return mime_type
+        # If it's a data URL, extract the mime type
+        m = DATA_URI_MIME_TYPE_PATTERN.match(self.image)
+        if m:
+            return m.group(1)
 
-        if isinstance(self.image, str):
-            # If it's a data URL, extract the mime type
-            m = DATA_URI_MIME_TYPE_PATTERN.match(self.image)
-            if m:
-                return m.group(1)
+        # Otherwise, try to guess based off the URL
+        if self.image.startswith("http:"):
+            return guess_type(self.image)[0]
 
-            # Otherwise, try to guess based off the URL
-            if self.image.startswith("http:"):
-                return guess_type(self.image)[0]
-
-        # FIXME log.warning("Could not determine mime type for image")
         return None
 
 
