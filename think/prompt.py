@@ -1,12 +1,28 @@
 from pathlib import Path
 from typing import Any, Optional
 
-from jinja2 import Environment, BaseLoader, FileSystemLoader, StrictUndefined
+from jinja2 import BaseLoader, Environment, FileSystemLoader, StrictUndefined
+
+
+def strip_block(txt: str) -> str:
+    """
+    Strip a multiline block
+
+    Strips whitespace from each line in the block so that the indentation
+    (if any) within the block is preserved, but the block itself is not
+    indented. Also strips any trailing whitespace.
+
+    :param txt: The block of text to strip.
+    :return: The stripped block of text.
+    """
+    lines = txt.splitlines()
+    min_indent = min(len(line) - len(line.lstrip()) for line in lines if line.strip())
+    return "\n".join(line[min_indent:].rstrip() for line in lines).strip("\n")
 
 
 class FormatTemplate:
     def __call__(self, template: str, **kwargs: dict[str, Any]) -> str:
-        return template.format(**kwargs)
+        return strip_block(template).format(**kwargs)
 
 
 class BaseJinjaTemplate:
@@ -16,7 +32,7 @@ class BaseJinjaTemplate:
             autoescape=False,
             lstrip_blocks=True,
             trim_blocks=True,
-            keep_trailing_newline=True,
+            keep_trailing_newline=False,
             undefined=StrictUndefined,
         )
 
@@ -26,7 +42,7 @@ class JinjaStringTemplate(BaseJinjaTemplate):
         super().__init__(None)
 
     def __call__(self, template: str, **kwargs: dict[str, Any]) -> str:
-        tpl = self.env.from_string(template)
+        tpl = self.env.from_string(strip_block(template))
         return tpl.render(**kwargs)
 
 

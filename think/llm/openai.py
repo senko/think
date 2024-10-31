@@ -1,5 +1,6 @@
 import json
 from logging import getLogger
+from time import time
 from typing import Any, AsyncGenerator, Callable
 
 from pydantic import BaseModel
@@ -7,21 +8,42 @@ from pydantic import BaseModel
 try:
     from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream
     from openai.types.chat import ChatCompletionChunk
-    from openai.types.chat.chat_completion_message import ChatCompletionMessage
 
 except ImportError as err:
     raise ImportError(
         "OpenAI client requires the OpenAI Python SDK: pip install openai"
     ) from err
 
-from .base import LLM
+from .base import LLM, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class OpenAIMessageAdapter:
+class OpenAIAdapter:
+    toolkit: ToolKit
+
+    def __init__(self, toolkit: ToolKit | None = None):
+        self.toolkit = toolkit
+
+    def get_tool_spec(self, tool: ToolDefinition) -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "arguments": tool.schema,
+            },
+        }
+
+    @property
+    def spec(self) -> list[dict] | None:
+        if self.toolkit is None:
+            return NOT_GIVEN
+
+        return self.toolkit.generate_tool_spec(self.get_tool_spec)
+
     def dump_message(self, message: Message) -> list[dict]:
         tool_calls = []
         tool_responses = {}
@@ -29,33 +51,36 @@ class OpenAIMessageAdapter:
         image_parts = []
 
         for part in message.content:
-            if part.type == ContentType.tool_call:
-                tool_calls.append(
-                    dict(
-                        id=part.tool_call.id,
-                        type="function",
-                        function=dict(
-                            name=part.tool_call.name,
-                            arguments=json.dumps(part.tool_call.arguments),
-                        ),
+            match part:
+                case ContentPart(type=ContentType.tool_call, tool_call=tool_call):
+                    tool_calls.append(
+                        dict(
+                            id=tool_call.id,
+                            type="function",
+                            function=dict(
+                                name=tool_call.name,
+                                arguments=json.dumps(tool_call.arguments),
+                            ),
+                        )
                     )
-                )
-            elif part.type == ContentType.tool_response:
-                tool_responses[part.tool_response.call.id] = part.tool_response.response
-            elif part.type == ContentType.text:
-                text_parts.append(
-                    dict(
-                        type="text",
-                        text=part.text,
+                case ContentPart(
+                    type=ContentType.tool_response, tool_response=tool_response
+                ):
+                    tool_responses[tool_response.call.id] = tool_response.response
+                case ContentPart(type=ContentType.text, text=text):
+                    text_parts.append(
+                        dict(
+                            type="text",
+                            text=text,
+                        )
                     )
-                )
-            elif part.type == ContentType.image:
-                image_parts.append(
-                    dict(
-                        type="image_url",
-                        image_url=dict(url=part.image),
+                case ContentPart(type=ContentType.image, image=image):
+                    image_parts.append(
+                        dict(
+                            type="image_url",
+                            image_url=dict(url=image),
+                        )
                     )
-                )
 
         if tool_responses:
             return [
@@ -179,10 +204,7 @@ class OpenAIMessageAdapter:
             content=parts + tool_calls,
         )
 
-    def parse_message(self, message: ChatCompletionMessage | dict[str, Any]) -> Message:
-        if isinstance(message, ChatCompletionMessage):
-            message = message.model_dump()
-
+    def parse_message(self, message: dict[str, Any]) -> Message:
         role = message.get("role", "user")
         if role == "tool":
             return self.parse_tool_call(message)
@@ -244,32 +266,6 @@ class OpenAIMessageAdapter:
         return c
 
 
-class OpenAIToolAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None):
-        self.toolkit = toolkit
-
-    # FIXME Almost the same as for anthropic, maybe have that as base
-    # and then inherit and override?
-    def get_tool_spec(self, tool: ToolDefinition) -> dict:
-        return {
-            "type": "function",
-            "function": {
-                "name": tool.name,
-                "description": tool.description,
-                "arguments": tool.schema,
-            },
-        }
-
-    @property
-    def spec(self) -> list[dict] | None:
-        if self.toolkit is None:
-            return NOT_GIVEN
-
-        return self.toolkit.generate_tool_spec(self.get_tool_spec)
-
-
 class OpenAIClient(LLM):
     provider = "openai"
 
@@ -286,97 +282,82 @@ class OpenAIClient(LLM):
     async def __call__(
         self,
         chat: Chat,
+        *,
+        parser: type[PydanticResultT]
+        | Callable[[str], CustomParserResultT]
+        | None = None,
         temperature: float | None = None,
         tools: ToolKit | list[Callable] | None = None,
-        parser: BaseModel | Callable | None = None,
         max_retries: int = 3,
-    ) -> str:
-        if tools:
-            if isinstance(tools, ToolKit):
-                toolkit = tools
-            elif isinstance(tools[0], Callable):
-                toolkit = ToolKit(tools)
-            else:
-                raise TypeError(f"Unsupported tools type: {type(tools)}")
-        else:
-            toolkit = None
+        max_steps: int = 5,
+        max_tokens: int | None = None,
+    ) -> str | PydanticResultT | CustomParserResultT:
+        toolkit = self._get_toolkit(tools)
 
         if isinstance(parser, type) and issubclass(parser, BaseModel):
             response_format = parser
         else:
             response_format = None
 
-        adapter = OpenAIMessageAdapter()
-        tool_adapter = OpenAIToolAdapter(toolkit)
+        adapter = OpenAIAdapter(toolkit)
         messages = adapter.dump_chat(chat)
-        print("SENDING MESSAGES", messages)
+        tools_dbg = f" and tools {{{toolkit.tool_names}}}" if toolkit else ""
+        t0 = time()
         if response_format:
+            log.debug(
+                f"Making a {self.model} call with messages: {messages}{tools_dbg}"
+                f"expecting {response_format.__name__} response"
+            )
             response = await self.client.beta.chat.completions.parse(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                tools=tool_adapter.spec,
+                tools=adapter.spec,
                 response_format=response_format,
+                max_completion_tokens=max_tokens or NOT_GIVEN,
             )
         else:
+            log.debug(
+                f"Making a {self.model} call with messages: {messages}{tools_dbg}"
+            )
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                tools=tool_adapter.spec,
+                tools=adapter.spec,
+                max_completion_tokens=max_tokens or NOT_GIVEN,
             )
 
-        print("GOT RESPONSE", response)
+        t1 = time()
+        log.debug(
+            f"Received response in {(t1 - t0):.1f}s: {response.choices[0].message}"
+        )
 
-        # TODO: Record response timings and potentially other metadata here
+        message = adapter.parse_message(response.choices[0].message.model_dump())
+        text, response_list = await self._process_message(chat, message, toolkit)
 
-        text = ""
-        response_list: list[ToolResponse] = []
-
-        print("TO PARSE", response.choices[0].message)
-        message = adapter.parse_message(response.choices[0].message)
-
-        chat.messages.append(message)
-
-        # FIXME: this is the same as for anthropic
-        for part in message.content:
-            # FIXME: this completely ignores images in responses
-            if part.type == ContentType.text:
-                text += part.text
-            elif part.type == ContentType.tool_call:
-                tool_response = await toolkit.execute_tool_call(part.tool_call)
-                response_list.append(tool_response)
-
-        # Maybe we don't actually need a single message with multiple responses?
-        # Check with anthropic client code
         if response_list:
-            chat.messages.append(
-                Message(
-                    role=Role.tool,
-                    content=[
-                        ContentPart(
-                            type=ContentType.tool_response,
-                            tool_response=tool_response,
-                        )
-                        for tool_response in response_list
-                    ],
+            if max_steps < 1:
+                log.warning("Tool call steps limit reached, stopping")
+            else:
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_retries=max_retries,
+                    max_steps=max_steps - 1,
+                    max_tokens=max_tokens,
                 )
-            )
-            return await self(
-                chat,
-                temperature=temperature,
-                tools=tools,
-                parser=parser,
-                max_retries=max_retries,
-            )
 
         if response_format and response.choices[0].message.parsed:
             return response.choices[0].message.parsed
 
         if parser:
             try:
-                return parser(message.content)
+                return parser(text)
             except ValueError as err:
+                log.debug(f"Error parsing response '{text}': {err}")
                 if not max_retries:
                     raise
 
@@ -388,6 +369,8 @@ class OpenAIClient(LLM):
                     tools=tools,
                     parser=parser,
                     max_retries=max_retries - 1,
+                    max_steps=max_steps,
+                    max_tokens=max_tokens,
                 )
 
         return text
@@ -396,15 +379,19 @@ class OpenAIClient(LLM):
         self,
         chat: Chat,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
-        adapter = OpenAIMessageAdapter()
+        adapter = OpenAIAdapter()
+        messages = adapter.dump_chat()
+        log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[
             ChatCompletionChunk
         ] = await self.client.chat.completions.create(
             model=self.model,
-            messages=adapter.dump_chat(chat),
+            messages=messages,
             temperature=temperature,
             stream=True,
+            max_completion_tokens=max_tokens or NOT_GIVEN,
         )
         text = ""
         async for chunk in stream:

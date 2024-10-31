@@ -142,6 +142,10 @@ class ToolKit:
         tool_defs = [ToolDefinition(func) for func in functions]
         self.tools = {t.name: t for t in tool_defs}
 
+    @property
+    def tool_names(self) -> list[str]:
+        return list(self.tools.keys())
+
     async def execute_tool_call(self, call: ToolCall) -> ToolResponse:
         tool = self.tools.get(call.name)
         if not tool:

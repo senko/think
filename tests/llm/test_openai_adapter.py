@@ -2,7 +2,7 @@ import pytest
 
 from tests.llm.test_chat import BASIC_CHAT, IMAGE_CHAT, SIMPLE_TOOL_CHAT
 from think.llm.chat import Chat
-from think.llm.openai import OpenAIMessageAdapter
+from think.llm.openai import OpenAIAdapter
 
 BASIC_OPENAI_MESSAGES = [
     {"role": "system", "content": "You're a friendly assistant"},
@@ -72,7 +72,7 @@ IMAGE_OPENAI_MESSAGES = [
     ],
 )
 def test_adapter(chat, expected):
-    adapter = OpenAIMessageAdapter()
+    adapter = OpenAIAdapter()
 
     chat = Chat.load(chat)
     messages = adapter.dump_chat(chat)

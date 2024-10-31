@@ -2,7 +2,7 @@ import pytest
 from anthropic import NOT_GIVEN
 
 from tests.llm.test_chat import BASIC_CHAT, IMAGE_CHAT, SIMPLE_TOOL_CHAT
-from think.llm.anthropic import AnthropicMessageAdapter
+from think.llm.anthropic import AnthropicAdapter
 from think.llm.chat import Chat
 
 BASIC_ANTHROPIC_SYSTEM = "You're a friendly assistant"
@@ -77,7 +77,7 @@ IMAGE_ANTHROPIC_MESSAGES = [
     ],
 )
 def test_adapter(chat, ex_system, expected):
-    adapter = AnthropicMessageAdapter()
+    adapter = AnthropicAdapter(None)
 
     chat = Chat.load(chat)
     system, messages = adapter.dump_chat(chat)

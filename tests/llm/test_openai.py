@@ -1,313 +1,213 @@
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, call, patch
+
 import pytest
+from openai import NOT_GIVEN
+from pydantic import BaseModel
+from test_openai_adapter import (
+    BASIC_CHAT,
+    BASIC_OPENAI_MESSAGES,
+)
 
-from think.llm.openai import ChatGPT, ToolError
-from think.chat import Chat
-
-
-def test_chatgpt_valid_api_key_and_default_values():
-    chat_gpt = ChatGPT("key")
-    assert chat_gpt.api_key == "key"
-    assert chat_gpt.model == "gpt-4-turbo-preview"
-    assert chat_gpt.temperature == 0.7
-
-
-@patch("think.llm.openai.getenv")
-def test_chatgpt_empty_api_key_looks_up_environment(mock_getenv):
-    mock_getenv.return_value = "key"
-    chat_gpt = ChatGPT()
-    assert chat_gpt.api_key == "key"
+from think.llm.chat import Chat
+from think.llm.openai import OpenAIClient
 
 
-def test_chatgpt_empty_key_no_env_raises_error():
-    with pytest.raises(ValueError, match="OpenAI API key is not set"):
-        ChatGPT("")
-
-
-def test_chatgpt_unsupported_model_raises_error():
-    with pytest.raises(ValueError, match="Unsupported model"):
-        ChatGPT("key", model="gpt-1")
-
-
-def test_run_tool_with_unknown_tool():
-    chatgpt = ChatGPT("key")
-    function_call = MagicMock()
-    function_call.name = "UnknownTool"
-    tools = [MagicMock(__name__="KnownTool")]
-
-    result = chatgpt._run_tool(function_call, tools=tools)
-
-    assert result == "ERROR: Unknown tool: UnknownTool; available tools: KnownTool"
-
-
-def test_run_tool_with_invalid_arguments():
-    chatgpt = ChatGPT("key")
-    tool = MagicMock(
-        __name__="tool",
-        _validate_arguments=MagicMock(side_effect=TypeError("Invalid arguments")),
-    )
-    function_call = MagicMock()
-    function_call.name = "tool"
-
-    result = chatgpt._run_tool(function_call=function_call, tools=[tool])
-
-    assert result == "ERROR: Invalid arguments"
-
-
-def test_run_tool_executes_with_valid_tool_and_arguments():
-    chatgpt = ChatGPT(api_key="key")
-    tool = MagicMock(
-        __name__="tool",
-        _validate_arguments=MagicMock(return_value={"arg1": "value1"}),
-    )
-    function_call = MagicMock(arguments={"arg1": "value1"})
-    function_call.name = "tool"
-
-    result = chatgpt._run_tool(function_call=function_call, tools=[tool])
-
-    assert result == tool.return_value
-    tool._validate_arguments.assert_called_once_with(function_call.arguments)
-    tool.assert_called_once_with(arg1="value1")
-
-
-def test_run_tool_catches_exception_from_tool_execution():
-    chatgpt = ChatGPT(api_key="key")
-    tool = MagicMock(__name__="tool")
-    tool.side_effect = ValueError("some error")
-
-    function_call = MagicMock()
-    function_call.name = "tool"
-
-    with pytest.raises(ToolError) as exc_info:
-        chatgpt._run_tool(function_call=function_call, tools=[tool])
-
-    assert isinstance(exc_info.value.__cause__, ValueError)
-    assert exc_info.value.__cause__.args == ("some error",)
-
-
-def test_call_chatgpt_no_functions():
-    chatgpt = ChatGPT(api_key="key")
-    chatgpt.client = MagicMock()
-    chatgpt.client.chat.completions.create.return_value = MagicMock(
-        choices=[MagicMock(message="hello")],
-        usage=MagicMock(total_tokens=10),
-    )
-
-    result = chatgpt._call_chatgpt(messages=[{"content": "Hello!"}])
-
-    assert result == "hello"
-    chatgpt.client.chat.completions.create.assert_called_once_with(
-        model="gpt-4-turbo-preview",
-        temperature=0.7,
-        messages=[{"content": "Hello!"}],
-    )
-
-
-def test_call_chatgpt_with_functions():
-    chatgpt = ChatGPT(api_key="key")
-    chatgpt.client = MagicMock()
-    chatgpt.client.chat.completions.create.return_value = MagicMock(
-        choices=[MagicMock(message="hello")],
-        usage=MagicMock(total_tokens=10),
-    )
-    tool = MagicMock(
-        __name__="tool",
-    )
-
-    result = chatgpt._call_chatgpt(
-        messages=[{"content": "Hello!"}],
-        tools=[tool],
-    )
-
-    assert result == "hello"
-    chatgpt.client.chat.completions.create.assert_called_once_with(
-        model="gpt-4-turbo-preview",
-        temperature=0.7,
-        messages=[{"content": "Hello!"}],
-        functions=[tool._get_json_schema.return_value],
-        function_call="auto",
-    )
-
-
-def test_call_simple():
-    chatgpt = ChatGPT(api_key="key")
-    chat = Chat("hello")
-    tool = MagicMock()
-
-    with patch.object(chatgpt, "_call_chatgpt") as mock_call_chatgpt:
-        mock_call_chatgpt.return_value = MagicMock(
-            function_call=None,
-            content="hello",
-        )
-
-        result = chatgpt(
-            chat=chat,
-            tools=[tool],
-        )
-
-        assert result == "hello"
-        mock_call_chatgpt.assert_called_once_with(
-            [{"role": "system", "content": "hello"}],
-            [tool],
-        )
-
-
-def test_call_function_call():
-    chatgpt = ChatGPT(api_key="key")
-    chat = Chat("hello")
-    tool = MagicMock(__name__="tool")
-    function_call = MagicMock()
-    function_call.name = "tool"
-
-    with patch.object(chatgpt, "_call_chatgpt") as mock_call_chatgpt:
-        with patch.object(chatgpt, "_run_tool") as mock_run_tool:
-            mock_call_chatgpt.side_effect = [
-                MagicMock(function_call=function_call),
-                MagicMock(function_call=None, content="hello"),
-            ]
-            mock_run_tool.return_value = "hello from tool"
-            result = chatgpt(
-                chat=chat,
-                tools=[tool],
-            )
-
-            assert result == "hello"
-
-            mock_call_chatgpt.assert_has_calls(
-                [
-                    call(
-                        [{"role": "system", "content": "hello"}],
-                        [tool],
-                    ),
-                    call(
-                        [
-                            {"role": "system", "content": "hello"},
-                            {"role": "assistant", "content": "Using tool 'tool'"},
-                            {
-                                "role": "function",
-                                "content": "hello from tool",
-                                "name": "tool",
-                            },
-                        ],
-                        [tool],
-                    ),
-                ]
-            )
-            mock_run_tool.assert_called_once_with(
-                function_call,
-                [tool],
-            )
-
-
-def test_call_propagates_function_call_error():
-    chatgpt = ChatGPT(api_key="key")
-    chat = Chat("hello")
-    tool = MagicMock(__name__="tool")
-    function_call = MagicMock()
-    function_call.name = "tool"
-
-    with patch.object(chatgpt, "_call_chatgpt") as mock_call_chatgpt:
-        with patch.object(chatgpt, "_run_tool") as mock_run_tool:
-            mock_call_chatgpt.side_effect = [
-                MagicMock(function_call=function_call),
-                MagicMock(function_call=None, content="hello"),
-            ]
-            try:
-                raise ValueError("some error")
-            except ValueError as err:
-                original_error = err
-            tool_error = ToolError("tool error")
-            tool_error.__cause__ = original_error
-            mock_run_tool.side_effect = tool_error
-
-            with pytest.raises(ValueError, match="some error"):
-                chatgpt(chat=chat, tools=[tool])
-
-            mock_call_chatgpt.assert_called_once_with(
-                [{"role": "system", "content": "hello"}],
-                [tool],
-            )
-            mock_run_tool.assert_called_once_with(
-                function_call,
-                [tool],
-            )
-
-
-def test_call_with_parser():
-    chatgpt = ChatGPT(api_key="key")
-    chat = Chat("hello")
-    parser = MagicMock(return_value="HELLO")
-
-    with patch.object(chatgpt, "_call_chatgpt") as mock_call_chatgpt:
-        mock_call_chatgpt.return_value = MagicMock(
-            function_call=None,
-            content="hello",
-        )
-
-        result = chatgpt(
-            chat=chat,
-            parser=parser,
-        )
-
-        assert result == "HELLO"
-        parser.assert_called_once_with("hello")
-
-
-def test_call_retry_on_parse_error():
-    chatgpt = ChatGPT(api_key="key")
-    chat = Chat("hello")
-
-    parser_calls = []
-
-    def parser(content: str) -> str:
-        parser_calls.append(call(content))
-
-        if content == "hello":
-            raise ValueError("test error")
-        return content.upper()
-
-    with patch.object(chatgpt, "_call_chatgpt") as mock_call_chatgpt:
-        mock_call_chatgpt.side_effect = [
+def response_fixture(msg: dict):
+    return MagicMock(
+        choices=[
             MagicMock(
-                function_call=None,
-                content="hello",
-            ),
-            MagicMock(
-                function_call=None,
-                content="world",
+                message=MagicMock(
+                    model_dump=MagicMock(return_value=msg),
+                ),
             ),
         ]
+    )
 
-        result = chatgpt(
-            chat=chat,
-            parser=parser,
-        )
 
-        assert result == "WORLD"
-        mock_call_chatgpt.assert_has_calls(
-            [
-                call(
-                    [{"role": "system", "content": "hello"}],
-                    None,
-                ),
-                call(
-                    [
-                        {"role": "system", "content": "hello"},
-                        {"role": "assistant", "content": "hello"},
-                        {
-                            "role": "user",
-                            "content": (
-                                "Error parsing response: test error. "
-                                "Please output your response EXACTLY as requested."
-                            ),
-                        },
-                    ],
-                    None,
-                ),
-            ]
-        )
-        assert parser_calls == [
-            call("hello"),
-            call("world"),
+def parsed_fixture(msg: dict, val: BaseModel):
+    fixture = response_fixture(msg)
+    fixture.choices[0].message.parsed = val
+    return fixture
+
+
+@pytest.mark.asyncio
+@patch("think.llm.openai.AsyncOpenAI")
+async def test_call_minimal(AsyncOpenAI):
+    chat = Chat.load(BASIC_CHAT)
+    client = OpenAIClient(api_key="fake-key", model="fake-model")
+
+    mock_create = AsyncMock(return_value=response_fixture(BASIC_OPENAI_MESSAGES[-1]))
+    AsyncOpenAI.return_value.chat.completions.create = mock_create
+
+    response = await client(chat)
+
+    assert response == "Hi!"
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_OPENAI_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=None,
+        max_completion_tokens=NOT_GIVEN,
+    )
+
+    AsyncOpenAI.assert_called_once_with(api_key="fake-key")
+
+
+@pytest.mark.asyncio
+@patch("think.llm.openai.AsyncOpenAI")
+async def test_call_with_options(AsyncOpenAI):
+    chat = Chat.load(BASIC_CHAT)
+    client = OpenAIClient(api_key="fake-key", model="fake-model")
+
+    mock_create = AsyncMock(return_value=response_fixture(BASIC_OPENAI_MESSAGES[-1]))
+    AsyncOpenAI.return_value.chat.completions.create = mock_create
+
+    response = await client(chat, temperature=0.5, max_tokens=10)
+
+    assert response == "Hi!"
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_OPENAI_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=0.5,
+        max_completion_tokens=10,
+    )
+
+
+@pytest.mark.asyncio
+@patch("think.llm.openai.AsyncOpenAI")
+async def test_call_with_tools(AsyncOpenAI):
+    chat = Chat.load(BASIC_CHAT)
+    client = OpenAIClient(api_key="fake-key", model="fake-model")
+
+    tool_defs = [
+        {
+            "type": "function",
+            "function": {
+                "name": "fake_tool",
+                "description": "Do something",
+                "arguments": {
+                    "additionalProperties": False,
+                    "properties": {
+                        "a": {"title": "A", "type": "integer"},
+                        "b": {"title": "B", "type": "string"},
+                    },
+                    "required": ["a", "b"],
+                    "type": "object",
+                },
+            },
+        }
+    ]
+
+    tool_call = {
+        "role": "assistant",
+        "content": None,
+        "tool_calls": [
+            {
+                "id": "call_boPTOC8z660AYdRFr9oogH4O",
+                "type": "function",
+                "function": {
+                    "name": "fake_tool",
+                    "arguments": '{"a": 1, "b": "hi"}',
+                },
+            }
+        ],
+    }
+
+    mock_create = AsyncMock(return_value=response_fixture(tool_call))
+    AsyncOpenAI.return_value.chat.completions.create = mock_create
+
+    def fake_tool(a: int, b: str) -> str:
+        """Do something"""
+        assert a == 1
+        assert b == "hi"
+        return "tool response"
+
+    response = await client(chat, tools=[fake_tool], max_steps=1)
+
+    assert response == ""
+    mock_create.assert_has_calls(
+        [
+            call(
+                model="fake-model",
+                messages=BASIC_OPENAI_MESSAGES,
+                tools=tool_defs,
+                temperature=None,
+                max_completion_tokens=NOT_GIVEN,
+            ),
+            call(
+                model="fake-model",
+                messages=BASIC_OPENAI_MESSAGES
+                + [
+                    tool_call,
+                    {
+                        "role": "tool",
+                        "tool_call_id": "call_boPTOC8z660AYdRFr9oogH4O",
+                        "content": "tool response",
+                    },
+                ],
+                tools=tool_defs,
+                temperature=None,
+                max_completion_tokens=NOT_GIVEN,
+            ),
         ]
-        assert len(list(chat)) == 1
+    )
+
+
+@pytest.mark.asyncio
+@patch("think.llm.openai.AsyncOpenAI")
+async def test_call_with_pydantic(AsyncOpenAI):
+    chat = Chat.load(BASIC_CHAT)
+    client = OpenAIClient(api_key="fake-key", model="fake-model")
+
+    class TestModel(BaseModel):
+        text: str
+
+    mock_parse = AsyncMock(
+        return_value=parsed_fixture(
+            BASIC_OPENAI_MESSAGES[-1],
+            TestModel(text="Hi!"),
+        )
+    )
+    AsyncOpenAI.return_value.beta.chat.completions.parse = mock_parse
+
+    response = await client(chat, parser=TestModel)
+
+    assert response.text == "Hi!"
+    mock_parse.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_OPENAI_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=None,
+        response_format=TestModel,
+        max_completion_tokens=NOT_GIVEN,
+    )
+
+    AsyncOpenAI.assert_called_once_with(api_key="fake-key")
+
+
+@pytest.mark.asyncio
+@patch("think.llm.openai.AsyncOpenAI")
+async def test_call_with_custom_parser(AsyncOpenAI):
+    chat = Chat.load(BASIC_CHAT)
+    client = OpenAIClient(api_key="fake-key", model="fake-model")
+
+    mock_create = AsyncMock(return_value=response_fixture(BASIC_OPENAI_MESSAGES[-1]))
+    AsyncOpenAI.return_value.chat.completions.create = mock_create
+
+    def custom_parser(val: str) -> float:
+        assert val == "Hi!"
+        return 0.5
+
+    response = await client(chat, parser=custom_parser)
+
+    assert response == 0.5
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_OPENAI_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=None,
+        max_completion_tokens=NOT_GIVEN,
+    )
+
+    AsyncOpenAI.assert_called_once_with(api_key="fake-key")

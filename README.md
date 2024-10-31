@@ -2,38 +2,60 @@
 
 Think is a Python package for creating thinking programs.
 
-It provides simple but powerful primitives for *robust* integration of Large Language
-Models (LLMs) into your Python programs.
+It provides simple but powerful primitives for composable and robust integration
+of Large Language Models (LLMs) into your Python programs.
+
+Think supports OpenAI and Anthropic models.
 
 ## Examples
 
-Using AI as an ordinary function:
+Ask a question:
 
 ```python
-from think.llm.openai import ChatGPT
-from think.ai import ai
+from think import LLM, ask
 
-@ai
-def haiku(topic: str) -> str:
-    """
-    Write a haiku about {{ topic }}
-    """
+llm = LLM.from_url("anthropic:///claude-3-haiku-20240307")
 
-llm = ChatGPT()
+async def haiku(topic):
+    return await ask(llm, "Write a haiku about {{ topic }}", topic=topic)
 
-print(haiku(llm, topic="computers"))
+print(asyncio.run(haiku("computers")))
 ```
 
-Allowing AI to use tools:
+Get answers as structured data:
+
+```python
+from think import LLM, LLMQuery
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class CityInfo(LLMQuery):
+    """
+    Give me basic information about {{ city }}.
+    """
+    name: str
+    country: str
+    population: int
+    latitude: float
+    longitude: float
+
+async def city_info(city):
+    return await CityInfo.run(llm, city=city)
+
+info = asyncio.run(city_info("Paris"))
+print(f"{info.name} is a city in {info.country} with {info.population} inhabitants.")
+```
+
+Integrate AI with custom tools:
 
 ```python
 from datetime import date
 
-from think.llm.openai import ChatGPT
-from think.chat import Chat
-from think.tool import tool
+from think import LLM
+from think.llm.chat import Chat
 
-@tool
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
 def current_date() -> str:
     """
     Get the current date.
@@ -42,44 +64,28 @@ def current_date() -> str:
     """
     return date.today().isoformat()
 
+async def days_to_xmas() -> str:
+    chat = Chat("How many days are left until Christmas?")
+    return await llm(chat, tools=[current_date])
 
-llm = ChatGPT()
-chat = Chat("You are a helpful assistant.")
-chat.user("How old are you (in days since your knowledge cutoff)?")
-
-print(llm(chat, tools=[current_date]))
+print(asyncio.run(days_to_xmas()))
 ```
 
-Parsing AI output:
+Use vision (with models that support it):
 
 ```python
-import json
-from pydantic import BaseModel
-from think.llm.openai import ChatGPT
-from think.chat import Chat
-from think.parser import JSONParser
 
+from think import LLM
+from think.llm.chat import Chat
 
-class CityInfo(BaseModel):
-    name: str
-    country: str
-    population: int
-    latitude: float
-    longitude: float
+llm = LLM.from_url("openai:///gpt-4o-mini")
 
+async def describe_image(path):
+    image_data = open(path, "rb").read()
+    chat = Chat().user("Describe the image in detail", images=[image_data])
+    return await llm(chat)
 
-llm = ChatGPT()
-parser = JSONParser(spec=CityInfo)
-chat = Chat(
-    "You are a hepful assistant. Your task is to answer questions about cities, "
-    "to the best of your knowledge. Your output must be a valid JSON conforming to "
-    "this JSON schema:\n" + json.dumps(parser.schema)
-).user(city)
-
-answer = llm(chat, parser=parser)
-
-print(f"{answer.name} is a city in {answer.country} with {answer.population} inhabitants.")
-print(f"It is located at {answer.latitude} latitude and {answer.longitude} longitude.")
+print(asyncio.run(describe_image("path/to/image.jpg")))
 ```
 
 ## Quickstart
@@ -92,34 +98,47 @@ pip install think-llm
 
 Note that the package name is `think-llm`, *not* `think`.
 
-Set up your LLM credentials (OpenAI or Anthropic, depending on the LLM you want to use):
+You can set up your LLM credentials via environment variables, for example:
 
 ```bash
 export OPENAI_API_KEY=<your-openai-key>
 export ANTHROPIC_API_KEY=<your-anthropic-key>
 ```
 
-And you're ready to go:
+Or pass them directly in the model URL:
 
 ```python
-from think.llm.openai import ChatGPT
-from think.chat import Chat
+from think import LLM
 
-llm = ChatGPT()
-chat = Chat("You are a helpful assistant.").user("Tell me a funny joke.")
-print(llm(chat))
+llm = LLM.from_url(f"openai://{YOUR_OPENAI_KEY}@/gpt-4o-mini")
 ```
 
-Explore the [examples](./examples/) directory for more usage examples, and the
-source code for documentation on how to use the library (until we build proper docs! if you
-want to help out with that, please see below).
+In practice, you might want to store the entire model URL in the environment
+variable and just call `LLM.from_url(os.environ["LLM_URL"])`.
+
+## Model URL
+
+Think uses a URL-like format to specify the model to use. The format is:
+
+```
+provider://[api-key@]server/model-name
+```
+
+- `provider` is the model provider, e.g. `openai` or `anthropic`
+- `api-key` is the API key for the model provider (optional if set via environment)
+- `server` is the server to use, useful for local LLMs; for OpenAI and Anthropic it
+    should be empty to use their default base URL
+- `model-name` is the name of the model to use
+
+Using the URL format allows you to easily switch between different models and providers
+without changing your code, or using multiple models in the same program without
+hardcoding anything.
 
 ## Roadmap
 
 Features and capabilities that are planned for the near future:
 
 - documentation
-- full support for Anthropic (tools, parsers, AI functions)
 - support for other LLM APIs via LiteLLM or similar
 - support for local LLMs via HuggingFace
 - more examples

@@ -1,46 +1,48 @@
-from base64 import b64decode, b64encode
-from json import loads
+from base64 import b64decode
+from json import JSONDecodeError, loads
 from logging import getLogger
-from typing import AsyncGenerator, Callable, Literal, TypeGuard, Union
+from time import time
+from typing import AsyncGenerator, Callable, Literal
 
-from anthropic import (
-    NOT_GIVEN,
-    AsyncAnthropic,
-    AsyncStream,
-)
-from anthropic.types import (
-    ContentBlock,
-    ImageBlockParam,
-    MessageParam,
-    RawMessageStreamEvent,
-    TextBlockParam,
-    ToolResultBlockParam,
-    ToolUseBlockParam,
-)
-from anthropic.types import (
-    Message as AnthropicMessage,
-)
-from anthropic.types.image_block_param import Source
-from pydantic import BaseModel
+try:
+    from anthropic import NOT_GIVEN, AsyncAnthropic, AsyncStream
+    from anthropic.types import Message as AnthropicMessage
+    from anthropic.types import RawMessageStreamEvent
+    from anthropic.types.image_block_param import Source
+except ImportError as err:
+    raise ImportError(
+        "Anthropic client requires the Anthropic Python SDK: pip install anthropic"
+    ) from err
 
-from .base import LLM
+from pydantic import BaseModel, ValidationError
+
+from .base import LLM, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
-
-AnthropicContentPart = Union[
-    TextBlockParam,
-    ImageBlockParam,
-    ToolUseBlockParam,
-    ToolResultBlockParam,
-    ContentBlock,
-    Source,
-]
-
 
 log = getLogger(__name__)
 
 
-class AnthropicMessageAdapter:
+class AnthropicAdapter:
+    toolkit: ToolKit
+
+    def __init__(self, toolkit: ToolKit | None = None):
+        self.toolkit = toolkit
+
+    def get_tool_spec(self, tool: ToolDefinition) -> dict:
+        return {
+            "name": tool.name,
+            "description": tool.description,
+            "input_schema": tool.schema,
+        }
+
+    @property
+    def spec(self) -> list[dict] | None:
+        if self.toolkit is None:
+            return NOT_GIVEN
+
+        return self.toolkit.generate_tool_spec(self.get_tool_spec)
+
     def dump_role(self, role: Role) -> Literal["user", "assistant"]:
         if role in [Role.system, Role.user, Role.tool]:
             return "user"
@@ -48,35 +50,45 @@ class AnthropicMessageAdapter:
             return "assistant"
 
     def dump_content_part(self, part: ContentPart) -> dict:
-        if part.type == ContentType.text:
-            return dict(
-                type="text",
-                text=part.text,
-            )
-        elif part.type == ContentType.image:
-            return dict(
-                type="image",
-                source=Source(
-                    type="base64",
-                    data=part.image_data,
-                    media_type=part.image_mime_type,
+        match part:
+            case ContentPart(type=ContentType.text, text=text):
+                return dict(
+                    type="text",
+                    text=text,
+                )
+            case ContentPart(type=ContentType.image):
+                return dict(
+                    type="image",
+                    source=Source(
+                        type="base64",
+                        data=part.image_data,
+                        media_type=part.image_mime_type,
+                    ),
+                )
+            case ContentPart(
+                type=ContentType.tool_call,
+                tool_call=ToolCall(id=id, name=name, arguments=arguments),
+            ):
+                return dict(
+                    type="tool_use",
+                    id=id,
+                    name=name,
+                    input=arguments,
+                )
+            case ContentPart(
+                type=ContentType.tool_response,
+                tool_response=ToolResponse(
+                    call=ToolCall(id=id),
+                    response=response,
                 ),
-            )
-        elif part.type == ContentType.tool_call:
-            return dict(
-                type="tool_use",
-                id=part.tool_call.id,
-                name=part.tool_call.name,
-                input=part.tool_call.arguments,
-            )
-        elif part.type == ContentType.tool_response:
-            return dict(
-                type="tool_result",
-                tool_use_id=part.tool_response.call.id,
-                content=part.tool_response.response,
-            )
-        else:
-            raise ValueError(f"Unknown content type: {part.type}")
+            ):
+                return dict(
+                    type="tool_result",
+                    tool_use_id=id,
+                    content=response,
+                )
+            case _:
+                raise ValueError(f"Unknown content type: {part.type}")
 
     def parse_content_part(self, part: dict) -> ContentPart:
         match part:
@@ -160,29 +172,8 @@ class AnthropicMessageAdapter:
         return c
 
 
-class AnthropicToolAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None):
-        self.toolkit = toolkit
-
-    def get_tool_spec(self, tool: ToolDefinition) -> dict:
-        return {
-            "name": tool.name,
-            "description": tool.description,
-            "input_schema": tool.schema,
-        }
-
-    @property
-    def spec(self) -> list[dict] | None:
-        if self.toolkit is None:
-            return NOT_GIVEN
-
-        return self.toolkit.generate_tool_spec(self.get_tool_spec)
-
-
 class AnthropicClient(LLM):
-    provider = "openai"
+    provider = "anthropic"
 
     def __init__(
         self,
@@ -197,100 +188,64 @@ class AnthropicClient(LLM):
     async def __call__(
         self,
         chat: Chat,
+        *,
+        parser: type[PydanticResultT]
+        | Callable[[str], CustomParserResultT]
+        | None = None,
         temperature: float | None = None,
         tools: ToolKit | list[Callable] | None = None,
-        parser: BaseModel | Callable | None = None,
         max_retries: int = 3,
-    ) -> str:
-        if tools:
-            if isinstance(tools, ToolKit):
-                toolkit = tools
-            elif isinstance(tools[0], Callable):
-                toolkit = ToolKit(tools)
-            else:
-                raise TypeError(f"Unsupported tools type: {type(tools)}")
-        else:
-            toolkit = None
+        max_steps: int = 5,
+        max_tokens: int | None = None,
+    ) -> str | PydanticResultT | CustomParserResultT:
+        toolkit = self._get_toolkit(tools)
 
-        adapter = AnthropicMessageAdapter()
-        tool_adapter = AnthropicToolAdapter(toolkit)
+        if max_tokens is None:
+            max_tokens = 4096
+
+        adapter = AnthropicAdapter(toolkit)
         system_message, messages = adapter.dump_chat(chat)
-        print("TOOLS", tool_adapter.spec)
-        print("MESSAGES", system_message, messages)
-        message: AnthropicMessage = await self.client.messages.create(
+        tools_dbg = f" and tools {{{toolkit.tool_names}}}" if toolkit else ""
+        log.debug(f"Making a {self.model} call with messages: {messages}{tools_dbg}")
+        t0 = time()
+        anthropic_message: AnthropicMessage = await self.client.messages.create(
             model=self.model,
             messages=messages,
-            temperature=temperature,
-            tools=tool_adapter.spec,
-            stream=False,
-            max_tokens=4096,  # FIXME
+            temperature=NOT_GIVEN if temperature is None else temperature,
+            tools=adapter.spec,
+            max_tokens=max_tokens,
         )
+        t1 = time()
 
-        # fixme
-        import json
+        anthropic_message = anthropic_message.model_dump()
+        log.debug(f"Received response in {(t1 - t0):.1f}s: {anthropic_message}")
 
-        message = message.model_dump()
-        # TODO: Record response timings and potentially other metadata here
-
-        text = ""
-        response_list: list[ToolResponse] = []
-
-        msg = adapter.parse_message(message)
-        print("Parsed message", msg)
-        chat.messages.append(msg)
-
-        for part in msg.content:
-            # FIXME: this completely ignores images in responses
-            if part.type == ContentType.text:
-                text += part.text
-            elif part.type == ContentType.tool_call:
-                tool_response = await toolkit.execute_tool_call(part.tool_call)
-                print("TOOL RESPONSE", tool_response)
-                response_list.append(tool_response)
+        message = adapter.parse_message(anthropic_message)
+        text, response_list = await self._process_message(chat, message, toolkit)
 
         if response_list:
-            chat.messages.append(
-                Message(
-                    role=Role.tool,
-                    content=[
-                        ContentPart(
-                            type=ContentType.tool_response,
-                            tool_response=tool_response,
-                        )
-                        for tool_response in response_list
-                    ],
+            if max_steps < 1:
+                log.warning("Tool call steps limit reached, stopping")
+            else:
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_steps=max_steps - 1,
+                    max_retries=max_retries,
                 )
-            )
-            return await self(
-                chat,
-                temperature=temperature,
-                tools=tools,
-                parser=parser,
-                max_retries=max_retries,
-            )
 
         if parser:
-            if isinstance(parser, type) and issubclass(parser, BaseModel):
-                try:
-                    return parser(**loads(text))
-                except Exception as err:
-                    # FIXME: duplication
-                    if not max_retries:
-                        raise
-
-                    error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
-                    chat.user(error_text)
-                    return await self(
-                        chat,
-                        temperature=temperature,
-                        tools=tools,
-                        parser=parser,
-                        max_retries=max_retries - 1,
-                    )
-
             try:
-                return parser(text)
-            except ValueError as err:
+                if isinstance(parser, type) and issubclass(parser, BaseModel):
+                    return parser(**loads(text))
+                else:
+                    return parser(text)
+
+            except (JSONDecodeError, ValidationError, ValueError) as err:
+                log.debug(f"Error parsing response '{text}': {err}")
+
                 if not max_retries:
                     raise
 
@@ -301,6 +256,7 @@ class AnthropicClient(LLM):
                     temperature=temperature,
                     tools=tools,
                     parser=parser,
+                    max_steps=max_steps,
                     max_retries=max_retries - 1,
                 )
 
@@ -310,18 +266,22 @@ class AnthropicClient(LLM):
         self,
         chat: Chat,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
-        adapter = AnthropicMessageAdapter()
+        if max_tokens is None:
+            max_tokens = 4096
+
+        adapter = AnthropicAdapter()
         system_message, messages = adapter.dump_chat(chat)
 
-        print("MESSAGES", messages)
+        log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[RawMessageStreamEvent] = await self.client.messages.create(
             model=self.model,
             messages=messages,
             temperature=NOT_GIVEN if temperature is None else temperature,
             stream=True,
-            system=system_message or NOT_GIVEN,
-            max_tokens=4096,  # FIXME
+            system=system_message,
+            max_tokens=max_tokens,
         )
         text = ""
         async for event in stream:
@@ -329,12 +289,12 @@ class AnthropicClient(LLM):
                 text += event.delta.text
                 yield event.delta.text
             else:
-                log.debug("OpenAIClient.stream(): ignoring unknown chunk %r", event)
+                log.debug("AnthropicClient.stream(): ignoring unknown chunk %r", event)
 
         if text:
             chat.messages.append(
-                Message.create(
-                    Role.assistant,
+                Message(
+                    role=Role.assistant,
                     content=[ContentPart(type=ContentType.text, text=text)],
                 )
             )

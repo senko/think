@@ -1,58 +1,196 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
-from anthropic import BadRequestError
+from anthropic import NOT_GIVEN
+from pydantic import BaseModel
+from test_anthropic_adapter import (
+    BASIC_ANTHROPIC_MESSAGES,
+    BASIC_CHAT,
+)
 
-from think.llm.anthropic import Claude
-from think.chat import Chat
-
-
-def test_anthropic_client_setup():
-    """Test that an Claude object can be created."""
-
-    c = Claude("fake-key", model="claude-2")
-    assert c.api_key == "fake-key"
-    assert c.model == "claude-2"
+from think.llm.anthropic import AnthropicClient
+from think.llm.chat import Chat
 
 
-def test_anthropic_client_requires_api_key():
-    """Test that an Claude object cannot be created without an API key."""
-
-    with pytest.raises(ValueError):
-        Claude("")
+def response_fixture(msg: dict):
+    return MagicMock(model_dump=MagicMock(return_value=msg))
 
 
-@patch("think.llm.anthropic.Anthropic")
-def test_anthropic_client_call_claude(mock_anthropic):
-    """Test that the Claude can call Claude AI."""
+@pytest.mark.asyncio
+@patch("think.llm.anthropic.AsyncAnthropic")
+async def test_call_minimal(AsyncAnthropic):
+    chat = Chat.load(BASIC_CHAT)
+    client = AnthropicClient(api_key="fake-key", model="fake-model")
 
-    mock_client = mock_anthropic.return_value
-    mock_client.completions.create.return_value.completion = "fake-response"
+    mock_create = AsyncMock(return_value=response_fixture(BASIC_ANTHROPIC_MESSAGES[-1]))
+    AsyncAnthropic.return_value.messages.create = mock_create
 
-    chat = Chat("system prompt")
+    response = await client(chat)
 
-    c = Claude("fake-key")
-    mock_anthropic.assert_called_once_with(api_key="fake-key")
+    assert response == "Hi!"
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_ANTHROPIC_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=NOT_GIVEN,
+        max_tokens=4096,
+    )
 
-    response = c(chat)
+    AsyncAnthropic.assert_called_once_with(api_key="fake-key")
 
-    assert response == "fake-response"
-    mock_client.completions.create.assert_called_once_with(
-        model="claude-2",
-        prompt="\n\nHuman: system prompt\n\nAssistant:",
-        max_tokens_to_sample=1000,
+
+@pytest.mark.asyncio
+@patch("think.llm.anthropic.AsyncAnthropic")
+async def test_call_with_options(AsyncAnthropic):
+    chat = Chat.load(BASIC_CHAT)
+    client = AnthropicClient(api_key="fake-key", model="fake-model")
+
+    mock_create = AsyncMock(return_value=response_fixture(BASIC_ANTHROPIC_MESSAGES[-1]))
+    AsyncAnthropic.return_value.messages.create = mock_create
+
+    response = await client(chat, temperature=0.5, max_tokens=10)
+
+    assert response == "Hi!"
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_ANTHROPIC_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=0.5,
+        max_tokens=10,
     )
 
 
-@patch("think.llm.anthropic.Anthropic")
-def test_anthropic_client_call_claude_handles_error(mock_anthropic, caplog):
-    mock_client = mock_anthropic.return_value
-    mock_client.completions.create.side_effect = BadRequestError(
-        "fake-error", response=MagicMock(), body=None
+@pytest.mark.asyncio
+@patch("think.llm.anthropic.AsyncAnthropic")
+async def test_call_with_tools(AsyncAnthropic):
+    chat = Chat.load(BASIC_CHAT)
+    client = AnthropicClient(api_key="fake-key", model="fake-model")
+
+    tool_call = {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "tool_use",
+                "id": "call_boPTOC8z660AYdRFr9oogH4O",
+                "name": "fake_tool",
+                "input": {"a": 1, "b": "hi"},
+            }
+        ],
+    }
+
+    tool_defs = [
+        {
+            "name": "fake_tool",
+            "description": "Do something",
+            "input_schema": {
+                "additionalProperties": False,
+                "properties": {
+                    "a": {"title": "A", "type": "integer"},
+                    "b": {"title": "B", "type": "string"},
+                },
+                "required": ["a", "b"],
+                "type": "object",
+            },
+        }
+    ]
+
+    mock_create = AsyncMock(return_value=response_fixture(tool_call))
+    AsyncAnthropic.return_value.messages.create = mock_create
+
+    def fake_tool(a: int, b: str) -> str:
+        """Do something"""
+        assert a == 1
+        assert b == "hi"
+        return "tool response"
+
+    response = await client(chat, tools=[fake_tool], max_steps=1)
+
+    assert response == ""
+    mock_create.assert_has_calls(
+        [
+            call(
+                model="fake-model",
+                messages=BASIC_ANTHROPIC_MESSAGES,
+                temperature=NOT_GIVEN,
+                tools=tool_defs,
+                max_tokens=4096,
+            ),
+            call(
+                model="fake-model",
+                messages=BASIC_ANTHROPIC_MESSAGES
+                + [
+                    tool_call,
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "call_boPTOC8z660AYdRFr9oogH4O",
+                                "content": "tool response",
+                            },
+                        ],
+                    },
+                ],
+                temperature=NOT_GIVEN,
+                tools=tool_defs,
+                max_tokens=4096,
+            ),
+        ]
     )
 
-    c = Claude("fake-key")
-    response = c(Chat())
 
-    assert response is None
-    assert "Error calling Claude: fake-error" in caplog.text
+@pytest.mark.asyncio
+@patch("think.llm.anthropic.AsyncAnthropic")
+async def test_call_with_pydantic(AsyncAnthropic):
+    chat = Chat.load(BASIC_CHAT)
+    client = AnthropicClient(api_key="fake-key", model="fake-model")
+
+    class TestModel(BaseModel):
+        text: str
+
+    mock_create = AsyncMock(
+        return_value=response_fixture(
+            {"role": "assistant", "content": '{"text": "Hi!"}'}
+        )
+    )
+    AsyncAnthropic.return_value.messages.create = mock_create
+
+    response = await client(chat, parser=TestModel)
+
+    assert response.text == "Hi!"
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_ANTHROPIC_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=NOT_GIVEN,
+        max_tokens=4096,
+    )
+
+    AsyncAnthropic.assert_called_once_with(api_key="fake-key")
+
+
+@pytest.mark.asyncio
+@patch("think.llm.anthropic.AsyncAnthropic")
+async def test_call_with_custom_parser(AsyncAnthropic):
+    chat = Chat.load(BASIC_CHAT)
+    client = AnthropicClient(api_key="fake-key", model="fake-model")
+
+    mock_create = AsyncMock(return_value=response_fixture(BASIC_ANTHROPIC_MESSAGES[-1]))
+    AsyncAnthropic.return_value.messages.create = mock_create
+
+    def custom_parser(val: str) -> float:
+        assert val == "Hi!"
+        return 0.5
+
+    response = await client(chat, parser=custom_parser)
+
+    assert response == 0.5
+    mock_create.assert_called_once_with(
+        model="fake-model",
+        messages=BASIC_ANTHROPIC_MESSAGES,
+        tools=NOT_GIVEN,
+        temperature=NOT_GIVEN,
+        max_tokens=4096,
+    )
+
+    AsyncAnthropic.assert_called_once_with(api_key="fake-key")
