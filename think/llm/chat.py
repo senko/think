@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import binascii
 import re
-from base64 import b64encode
+from base64 import b64decode, b64encode
 from enum import Enum
 from mimetypes import guess_type
 from typing import Any
@@ -62,7 +63,13 @@ class ContentPart(BaseModel):
             for scheme in ["data", "http", "https"]:
                 if v.startswith(f"{scheme}:"):
                     return v
-            raise ValueError("Image should be a data or HTTP(S) URL")
+
+            try:
+                v = b64decode(v)
+            except (ValueError, binascii.Error):
+                raise ValueError(
+                    "Image should be data:, http: or https: URL or base64-encoded raw image data"
+                )
 
         if not isinstance(v, bytes):
             raise ValueError("Image should be a string (URL) or bytes (raw image data)")

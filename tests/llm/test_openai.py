@@ -50,7 +50,7 @@ async def test_call_minimal(AsyncOpenAI):
         max_completion_tokens=NOT_GIVEN,
     )
 
-    AsyncOpenAI.assert_called_once_with(api_key="fake-key")
+    AsyncOpenAI.assert_called_once_with(api_key="fake-key", base_url=None)
 
 
 @pytest.mark.asyncio
@@ -183,8 +183,6 @@ async def test_call_with_pydantic(AsyncOpenAI):
         max_completion_tokens=NOT_GIVEN,
     )
 
-    AsyncOpenAI.assert_called_once_with(api_key="fake-key")
-
 
 @pytest.mark.asyncio
 @patch("think.llm.openai.AsyncOpenAI")
@@ -209,5 +207,3 @@ async def test_call_with_custom_parser(AsyncOpenAI):
         temperature=None,
         max_completion_tokens=NOT_GIVEN,
     )
-
-    AsyncOpenAI.assert_called_once_with(api_key="fake-key")

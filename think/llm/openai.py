@@ -279,7 +279,7 @@ class OpenAIClient(LLM):
         base_url: str | None = None,
     ):
         super().__init__(model, api_key=api_key, base_url=base_url)
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def __call__(
         self,
@@ -303,7 +303,7 @@ class OpenAIClient(LLM):
 
         adapter = OpenAIAdapter(toolkit)
         messages = adapter.dump_chat(chat)
-        tools_dbg = f" and tools {{{toolkit.tool_names}}}" if toolkit else ""
+        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
         t0 = time()
         if response_format:
             log.debug(

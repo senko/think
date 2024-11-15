@@ -30,13 +30,14 @@ async def test_call_minimal(AsyncAnthropic):
     assert response == "Hi!"
     mock_create.assert_called_once_with(
         model="fake-model",
+        system="You're a friendly assistant",
         messages=BASIC_ANTHROPIC_MESSAGES,
         tools=NOT_GIVEN,
         temperature=NOT_GIVEN,
         max_tokens=4096,
     )
 
-    AsyncAnthropic.assert_called_once_with(api_key="fake-key")
+    AsyncAnthropic.assert_called_once_with(api_key="fake-key", base_url=None)
 
 
 @pytest.mark.asyncio
@@ -54,6 +55,7 @@ async def test_call_with_options(AsyncAnthropic):
     mock_create.assert_called_once_with(
         model="fake-model",
         messages=BASIC_ANTHROPIC_MESSAGES,
+        system="You're a friendly assistant",
         tools=NOT_GIVEN,
         temperature=0.5,
         max_tokens=10,
@@ -112,6 +114,7 @@ async def test_call_with_tools(AsyncAnthropic):
                 model="fake-model",
                 messages=BASIC_ANTHROPIC_MESSAGES,
                 temperature=NOT_GIVEN,
+                system="You're a friendly assistant",
                 tools=tool_defs,
                 max_tokens=4096,
             ),
@@ -131,6 +134,7 @@ async def test_call_with_tools(AsyncAnthropic):
                         ],
                     },
                 ],
+                system="You're a friendly assistant",
                 temperature=NOT_GIVEN,
                 tools=tool_defs,
                 max_tokens=4096,
@@ -161,12 +165,11 @@ async def test_call_with_pydantic(AsyncAnthropic):
     mock_create.assert_called_once_with(
         model="fake-model",
         messages=BASIC_ANTHROPIC_MESSAGES,
+        system="You're a friendly assistant",
         tools=NOT_GIVEN,
         temperature=NOT_GIVEN,
         max_tokens=4096,
     )
-
-    AsyncAnthropic.assert_called_once_with(api_key="fake-key")
 
 
 @pytest.mark.asyncio
@@ -188,9 +191,8 @@ async def test_call_with_custom_parser(AsyncAnthropic):
     mock_create.assert_called_once_with(
         model="fake-model",
         messages=BASIC_ANTHROPIC_MESSAGES,
+        system="You're a friendly assistant",
         tools=NOT_GIVEN,
         temperature=NOT_GIVEN,
         max_tokens=4096,
     )
-
-    AsyncAnthropic.assert_called_once_with(api_key="fake-key")

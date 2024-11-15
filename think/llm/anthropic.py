@@ -185,7 +185,7 @@ class AnthropicClient(LLM):
         base_url: str | None = None,
     ):
         super().__init__(model, api_key=api_key, base_url=base_url)
-        self.client = AsyncAnthropic(api_key=api_key)
+        self.client = AsyncAnthropic(api_key=api_key, base_url=base_url)
 
     async def __call__(
         self,
@@ -207,7 +207,7 @@ class AnthropicClient(LLM):
 
         adapter = AnthropicAdapter(toolkit)
         system_message, messages = adapter.dump_chat(chat)
-        tools_dbg = f" and tools {{{toolkit.tool_names}}}" if toolkit else ""
+        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
         log.debug(f"Making a {self.model} call with messages: {messages}{tools_dbg}")
         t0 = time()
         anthropic_message: AnthropicMessage = await self.client.messages.create(
@@ -216,6 +216,7 @@ class AnthropicClient(LLM):
             temperature=NOT_GIVEN if temperature is None else temperature,
             tools=adapter.spec,
             max_tokens=max_tokens,
+            system=system_message,
         )
         t1 = time()
 

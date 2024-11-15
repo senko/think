@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from logging import getLogger
 from typing import AsyncGenerator, Callable, TypeVar, overload
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel
 
@@ -50,10 +50,32 @@ class LLM(ABC):
     @classmethod
     def from_url(cls, url: str) -> "LLM":
         result = urlparse(url)
+        query = parse_qs(result.query) if result.query else {}
+
+        base_url_scheme = "http"
+        provider = result.scheme
+        model = query.get("model", [result.path.lstrip("/")])[0]
+        base_url = None
+
+        if provider.endswith("+ssl"):
+            base_url_scheme = "https"
+            provider = provider.replace("+ssl", "")
+
+        if result.hostname:
+            base_url_port = f":{result.port}" if result.port else ""
+            base_url = (
+                f"{base_url_scheme}://{result.hostname}{base_url_port}{result.path}"
+            )
+
+        if base_url and (not result.query or not query.get("model")):
+            raise ValueError(
+                "When providing a base URL, model must be passed as a query parameter"
+            )
+
         return cls.for_provider(result.scheme)(
-            model=result.path.lstrip("/"),
+            model=model,
             api_key=result.username,
-            base_url=result.hostname,
+            base_url=base_url,
         )
 
     def _get_toolkit(
