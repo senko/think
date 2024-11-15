@@ -17,7 +17,7 @@ log = getLogger(__name__)
 
 
 class LLM(ABC):
-    PROVIDERS = ["openai", "anthropic"]
+    PROVIDERS = ["anthropic", "ollama", "openai"]
     provider: str
     base_url: str | None = None
     model: str
@@ -43,6 +43,11 @@ class LLM(ABC):
             from .anthropic import AnthropicClient
 
             return AnthropicClient
+
+        elif provider == "ollama":
+            from .ollama import OllamaClient
+
+            return OllamaClient
 
         else:
             raise ValueError(f"Unknown provider: {provider}")
