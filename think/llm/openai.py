@@ -101,7 +101,7 @@ class OpenAIAdapter:
                 dict(
                     role="assistant",
                     content=text_parts or None,
-                    tool_calls=tool_calls,
+                    tool_calls=tool_calls or None,
                 )
             ]
 

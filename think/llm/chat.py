@@ -277,3 +277,4 @@ class Chat:
     def clone(self) -> "Chat":
         c = Chat()
         c.messages = [m.model_copy(deep=True) for m in self.messages]
+        return c

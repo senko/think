@@ -7,7 +7,7 @@ from think.llm.openai import OpenAIAdapter
 BASIC_OPENAI_MESSAGES = [
     {"role": "system", "content": "You're a friendly assistant"},
     {"role": "user", "content": "Say Hi."},
-    {"role": "assistant", "content": "Hi!", "tool_calls": []},
+    {"role": "assistant", "content": "Hi!", "tool_calls": None},
 ]
 
 SIMPLE_TOOL_OPENAI_MESSAGES = [
@@ -38,7 +38,7 @@ SIMPLE_TOOL_OPENAI_MESSAGES = [
     {
         "role": "assistant",
         "content": "The solution to the math question \\(1 + 1\\) is \\(2\\).",
-        "tool_calls": [],
+        "tool_calls": None,
     },
 ]
 
@@ -58,7 +58,7 @@ IMAGE_OPENAI_MESSAGES = [
     {
         "role": "assistant",
         "content": "The image appears to be a simple black silhouette of a cat.",
-        "tool_calls": [],
+        "tool_calls": None,
     },
 ]
 
