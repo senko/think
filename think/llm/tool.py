@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
-from inspect import Parameter, getdoc, signature
+from inspect import Parameter, getdoc, signature, isawaitable
 from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
@@ -162,7 +162,9 @@ class ToolKit:
             )
 
         try:
-            response_text: str = tool.func(**args.__dict__)
+            response_text = tool.func(**args.__dict__)
+            if isawaitable(response_text):
+                response_text = await response_text
             return ToolResponse(call=call, response=response_text)
         except ToolError as err:
             return ToolResponse(
