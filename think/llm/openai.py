@@ -66,9 +66,16 @@ class OpenAIAdapter:
                         )
                     )
                 case ContentPart(
-                    type=ContentType.tool_response, tool_response=tool_response
+                    type=ContentType.tool_response,
+                    tool_response=ToolResponse(
+                        call=call,
+                        response=response,
+                        error=error,
+                    ),
                 ):
-                    tool_responses[tool_response.call.id] = tool_response.response
+                    tool_responses[call.id] = (
+                        response if response is not None else (error or "no response")
+                    )
                 case ContentPart(type=ContentType.text, text=text):
                     text_parts.append(
                         dict(

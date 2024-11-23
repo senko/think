@@ -82,12 +82,13 @@ class AnthropicAdapter:
                 tool_response=ToolResponse(
                     call=ToolCall(id=id),
                     response=response,
+                    error=error,
                 ),
             ):
                 return dict(
                     type="tool_result",
                     tool_use_id=id,
-                    content=response,
+                    content=response if response is not None else (error or ""),
                 )
             case _:
                 raise ValueError(f"Unknown content type: {part.type}")
