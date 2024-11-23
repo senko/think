@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import json
+from logging import getLogger
 import re
 from dataclasses import dataclass
 from inspect import Parameter, getdoc, signature, isawaitable
 from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+
+
+log = getLogger(__name__)
 
 
 class ToolDefinition:
@@ -151,15 +155,22 @@ class ToolKit:
     async def execute_tool_call(self, call: ToolCall) -> ToolResponse:
         tool = self.tools.get(call.name)
         if not tool:
+            log.debug(f"Tool call with an unknown tool: {call.name}")
             return ToolResponse(call=call, error=f"ERROR: Unknown tool: {call.name}")
 
         try:
             args = tool.model(**call.arguments)
         except (TypeError, ValidationError) as err:
+            log.debug(
+                f"Tool call for {call.name} with invalid arguments {call.arguments}: {err}",
+                exc_info=True,
+            )
             return ToolResponse(
                 call=call,
                 error=f"ERROR: Error parsing arguments for {call.name}: {err}",
             )
+
+        log.debug(f"Tool call {call.name} requested with args {call.arguments}")
 
         try:
             response_text = tool.func(**args.__dict__)
@@ -167,6 +178,7 @@ class ToolKit:
                 response_text = await response_text
             return ToolResponse(call=call, response=response_text)
         except ToolError as err:
+            log.debug(f"Tool {call.name} raised an error: {err}", exc_info=True)
             return ToolResponse(
                 call=call, error=f"ERROR: Error running tool {call.name}: {err}"
             )
