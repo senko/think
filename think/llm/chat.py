@@ -84,6 +84,15 @@ class ContentPart(BaseModel):
         return f"data:{mime_type};base64,{b64encode(v).decode('ascii')}"
 
     @property
+    def is_image_url(self) -> bool:
+        """
+        Return True if the image is an HTTP(S) URL.
+
+        :return: True if the image is an HTTP(S) URL
+        """
+        return self.image and self.image.startswith(("http:", "https:"))
+
+    @property
     def image_data(self) -> str | None:
         """
         Return base64-encoded image data if possible.

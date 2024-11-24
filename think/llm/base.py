@@ -49,6 +49,15 @@ class LLM(ABC):
 
             return OllamaClient
 
+        elif provider == "google":
+            from .google import GoogleClient
+
+            return GoogleClient
+
+        elif provider == "groq":
+            from .groq import GroqClient
+
+            return GroqClient
         else:
             raise ValueError(f"Unknown provider: {provider}")
 
