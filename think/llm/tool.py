@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import json
-from logging import getLogger
 import re
 from dataclasses import dataclass
-from inspect import Parameter, getdoc, signature, isawaitable
+from inspect import Parameter, getdoc, isawaitable, signature
+from logging import getLogger
 from typing import Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
-
 
 log = getLogger(__name__)
 

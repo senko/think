@@ -30,11 +30,38 @@ class GoogleAdapter:
         self.toolkit = toolkit
 
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
-        raise NotImplementedError("Tools are not yet supported on Gemini.")
+        from copy import deepcopy
+
+        def remove_additional_properties(d: dict):
+            for v in d.values():
+                if isinstance(v, dict):
+                    remove_additional_properties(v)
+                elif isinstance(v, list):
+                    for item in v:
+                        if isinstance(item, dict):
+                            remove_additional_properties(item)
+
+            d.pop("additionalProperties", None)
+            d.pop("title", None)
+
+        schema = deepcopy(tool.schema)
+        remove_additional_properties(schema)
+
+        return {
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": schema,
+        }
 
     @property
-    def spec(self) -> list[dict] | None:
-        return None
+    def spec(self) -> dict | None:
+        if self.toolkit is None:
+            return None
+
+        defs = self.toolkit.generate_tool_spec(self.get_tool_spec)
+        return {
+            "function_declarations": defs,
+        }
 
     def dump_message(self, message: Message) -> list[dict]:
         role = "model" if message.role == Role.assistant else "user"
@@ -63,6 +90,37 @@ class GoogleAdapter:
                                 }
                             }
                         )
+                case ContentPart(type=ContentType.tool_call, tool_call=tool_call):
+                    parts.append(
+                        {
+                            "function_call": {
+                                "name": tool_call.id,
+                                "args": tool_call.arguments,
+                            }
+                        }
+                    )
+                case ContentPart(
+                    type=ContentType.tool_response,
+                    tool_response=ToolResponse(
+                        call=ToolCall(id=id),
+                        response=response,
+                        error=error,
+                    ),
+                ):
+                    retval = {}
+                    if response:
+                        retval["response"] = response
+                    if error:
+                        retval["error"] = error
+
+                    parts.append(
+                        {
+                            "function_response": {
+                                "name": id,
+                                "response": retval,
+                            }
+                        }
+                    )
                 case _:
                     # FIXME: add tool call/response support
                     # Docs: https://ai.google.dev/api/caching#Content
@@ -80,6 +138,36 @@ class GoogleAdapter:
         for m in chat.messages:
             messages.extend(self.dump_message(m))
         return messages
+
+    def parse_message(self, message: dict) -> Message:
+        role = Role.assistant if message["role"] == "model" else Role.user
+
+        content_parts = []
+
+        for part in message["parts"]:
+            match part:
+                case {"text": text}:
+                    content_parts.append(
+                        ContentPart(
+                            type=ContentType.text,
+                            text=text,
+                        )
+                    )
+                case {"function_call": {"name": name, "args": args}}:
+                    content_parts.append(
+                        ContentPart(
+                            type=ContentType.tool_call,
+                            tool_call=ToolCall(
+                                id=name,
+                                name=name,
+                                arguments=args,
+                            ),
+                        )
+                    )
+        return Message(
+            role=role,
+            content=content_parts,
+        )
 
 
 class GoogleClient(LLM):
@@ -123,14 +211,29 @@ class GoogleClient(LLM):
                 max_output_tokens=max_tokens,
             ),
             stream=False,
-            tools=None,  # FIXME: add tool support
-            tool_config=None,  # FIXME: add tool support
+            tools=adapter.spec,
         )
 
         t1 = time()
         log.debug(f"Received response in {(t1 - t0):.1f}s: {response.candidates[0]}")
 
-        return response.text
+        message = adapter.parse_message(response.to_dict()["candidates"][0]["content"])
+        text, response_list = await self._process_message(chat, message, toolkit)
+
+        if response_list:
+            if max_steps < 1:
+                log.warning("Tool call steps limit reached, stopping")
+            else:
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_retries=max_retries,
+                    max_steps=max_steps - 1,
+                    max_tokens=max_tokens,
+                )
+        return text
 
     async def stream(
         self,

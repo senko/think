@@ -391,7 +391,7 @@ class OpenAIClient(LLM):
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
         adapter = OpenAIAdapter()
-        messages = adapter.dump_chat()
+        messages = adapter.dump_chat(chat)
         log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[
             ChatCompletionChunk

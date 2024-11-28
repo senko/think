@@ -5,7 +5,7 @@ from logging import getLogger
 from time import time
 from typing import Any, AsyncGenerator, Callable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 try:
     from groq import NOT_GIVEN, AsyncGroq, AsyncStream
@@ -30,11 +30,21 @@ class GroqAdapter:
         self.toolkit = toolkit
 
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
-        raise NotImplementedError("Tools are not yet supported on Gemini.")
+        return {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.schema,
+            },
+        }
 
     @property
     def spec(self) -> list[dict] | None:
-        return None
+        if self.toolkit is None:
+            return NOT_GIVEN
+
+        return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
     def dump_message(self, message: Message) -> dict:
         role = "assistant" if message.role == Role.assistant else "user"
@@ -63,6 +73,35 @@ class GroqAdapter:
                             },
                         }
                     )
+                case ContentPart(type=ContentType.tool_call, tool_call=tool_call):
+                    return {
+                        "role": "assistant",
+                        "tool_calls": [
+                            {
+                                "id": tool_call.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tool_call.name,
+                                    "arguments": json.dumps(tool_call.arguments),
+                                },
+                            },
+                        ],
+                    }
+                case ContentPart(
+                    type=ContentType.tool_response,
+                    tool_response=ToolResponse(
+                        call=call,
+                        response=response,
+                        error=error,
+                    ),
+                ):
+                    # FIXME - this is ugly!
+                    return {
+                        "role": "tool",
+                        "content": response if response is not None else (error or ""),
+                        "name": call.name,
+                        "tool_call_id": call.id,
+                    }
                 case _:
                     log.warning(f"Unsupported content type: {part.type}")
                     continue
@@ -76,9 +115,32 @@ class GroqAdapter:
         return [self.dump_message(msg) for msg in chat]
 
     def parse_message(self, message: dict) -> Message:
-        role = Role.assistant if message["role"] == "assistant" else Role.user
-        content = [ContentPart(type=ContentType.text, text=message["content"])]
-        return Message(role=role, content=content)
+        role = Role.assistant if message.get("role") == "assistant" else Role.user
+        raw_content = message.get("content")
+        # FIXME: match on "type" instead
+        if isinstance(raw_content, str):
+            return Message(
+                role=role,
+                content=[ContentPart(type=ContentType.text, text=raw_content)],
+            )
+
+        parts = []
+        raw_tool_calls = message.get("tool_calls")
+        if raw_tool_calls:
+            for raw_call in raw_tool_calls:
+                parts.append(
+                    ContentPart(
+                        type=ContentType.tool_call,
+                        tool_call=ToolCall(
+                            id=raw_call["id"],
+                            name=raw_call["function"]["name"],
+                            # FIXME - guard
+                            arguments=json.loads(raw_call["function"]["arguments"]),
+                        ),
+                    )
+                )
+
+        return Message(role=role, content=parts)
 
 
 class GroqClient(LLM):
@@ -128,7 +190,47 @@ class GroqClient(LLM):
         log.debug(f"Received response in {(t1 - t0):.1f}s: {raw_message}")
 
         message = adapter.parse_message(raw_message)
-        return message
+        text, response_list = await self._process_message(chat, message, toolkit)
+
+        if response_list:
+            if max_steps < 1:
+                log.warning("Tool call steps limit reached, stopping")
+            else:
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_retries=max_retries,
+                    max_steps=max_steps - 1,
+                    max_tokens=max_tokens,
+                )
+
+        if parser:
+            try:
+                if isinstance(parser, type) and issubclass(parser, BaseModel):
+                    return parser(**json.loads(text))
+                else:
+                    return parser(text)
+
+            except (json.JSONDecodeError, ValidationError, ValueError) as err:
+                log.debug(f"Error parsing response '{text}': {err}")
+
+                if not max_retries:
+                    raise
+
+                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
+                chat.user(error_text)
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_steps=max_steps,
+                    max_retries=max_retries - 1,
+                )
+
+        return text
 
     async def stream(
         self,
@@ -151,9 +253,10 @@ class GroqClient(LLM):
         )
         text = ""
         async for chunk in stream:
-            chunk_text = chunk.choices[0].delta.content
-            text += chunk_text
-            yield chunk_text
+            cd = chunk.choices[0].delta
+            if cd.content:
+                text += cd.content
+                yield cd.content
 
         if text:
             chat.messages.append(
