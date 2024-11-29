@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from json import JSONDecodeError, loads
 from logging import getLogger
+from time import time
 from typing import AsyncGenerator, Callable, TypeVar, overload
 from urllib.parse import parse_qs, urlparse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
+
+from think.parser import JSONParser
 
 from .chat import Chat, ContentPart, ContentType, Message, Role
-from .tool import ToolKit, ToolResponse
+from .tool import ToolDefinition, ToolKit, ToolResponse
 
 CustomParserResultT = TypeVar("CustomParserResultT")
 PydanticResultT = TypeVar("PydanticResultT", bound=BaseModel)
@@ -16,9 +20,27 @@ PydanticResultT = TypeVar("PydanticResultT", bound=BaseModel)
 log = getLogger(__name__)
 
 
+class BaseAdapter(ABC):
+    toolkit: ToolKit
+
+    def __init__(self, toolkit: ToolKit | None = None):
+        self.toolkit = toolkit
+
+    @abstractmethod
+    def get_tool_spec(self, tool: ToolDefinition) -> dict: ...
+
+    @property
+    def spec(self) -> dict | None:
+        if self.toolkit is None:
+            return None
+        return self.toolkit.generate_tool_spec(self.get_tool_spec)
+
+
 class LLM(ABC):
     PROVIDERS = ["anthropic", "ollama", "openai"]
+
     provider: str
+    adapter_class: type[BaseAdapter]
     base_url: str | None = None
     model: str
 
@@ -105,7 +127,6 @@ class LLM(ABC):
         return ToolKit(tools)
 
     @overload
-    @abstractmethod
     async def __call__(
         self,
         chat: Chat,
@@ -119,7 +140,6 @@ class LLM(ABC):
     ) -> PydanticResultT: ...
 
     @overload
-    @abstractmethod
     async def __call__(
         self,
         chat: Chat,
@@ -133,7 +153,6 @@ class LLM(ABC):
     ) -> CustomParserResultT: ...
 
     @overload
-    @abstractmethod
     async def __call__(
         self,
         chat: Chat,
@@ -145,7 +164,6 @@ class LLM(ABC):
         max_tokens: int | None = None,
     ) -> str: ...
 
-    @abstractmethod
     async def __call__(
         self,
         chat: Chat,
@@ -179,7 +197,89 @@ class LLM(ABC):
         :raises ValueError: If the temperature is not between 0 and 1
         :raises APIError: If there is an error communicating with the API
         """
-        ...
+        toolkit = self._get_toolkit(tools)
+        adapter = self.adapter_class(toolkit)
+
+        if isinstance(parser, type) and issubclass(parser, BaseModel):
+            response_format = parser
+        else:
+            response_format = None
+
+        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
+        format_dbg = (
+            f" expecting {response_format.__name__} response" if response_format else ""
+        )
+        log.debug(
+            f"Making a {self.model} call with {len(chat)} messages{tools_dbg}{format_dbg}"
+        )
+
+        # FIXME: error handling!
+        t0 = time()
+        message = await self._internal_call(
+            chat,
+            temperature,
+            max_tokens,
+            adapter,
+            response_format=response_format,
+        )
+        t1 = time()
+
+        log.debug(f"Received response in {(t1 - t0):.1f}s")
+
+        text, response_list = await self._process_message(chat, message, toolkit)
+
+        if response_list:
+            if max_steps < 1:
+                log.warning("Tool call steps limit reached, stopping")
+            else:
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_steps=max_steps - 1,
+                    max_retries=max_retries,
+                )
+
+        if message.parsed:
+            return message.parsed
+
+        elif parser:
+            try:
+                if isinstance(parser, type) and issubclass(parser, BaseModel):
+                    message.parsed = JSONParser(spec=parser)(text)
+                else:
+                    message.parsed = parser(text)
+                return message.parsed
+
+            except (JSONDecodeError, ValidationError, ValueError) as err:
+                log.debug(f"Error parsing response '{text}': {err}")
+
+                if not max_retries:
+                    raise
+
+                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
+                chat.user(error_text)
+                return await self(
+                    chat,
+                    temperature=temperature,
+                    tools=tools,
+                    parser=parser,
+                    max_steps=max_steps,
+                    max_retries=max_retries - 1,
+                )
+
+        return text
+
+    @abstractmethod
+    async def _internal_call(
+        self,
+        chat: Chat,
+        temperature: float | None,
+        max_tokens: int | None,
+        adapter: BaseAdapter,
+        response_format: PydanticResultT | None = None,
+    ) -> Message: ...
 
     async def _process_message(
         self,
@@ -232,3 +332,11 @@ class LLM(ABC):
         :return: An async generator of response strings
         """
         ...
+
+
+__all__ = [
+    "BaseAdapter",
+    "LLM",
+    "CustomParserResultT",
+    "PydanticResultT",
+]

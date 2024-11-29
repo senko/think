@@ -139,6 +139,7 @@ class Message(BaseModel):
 
     role: Role
     content: list[ContentPart] | None = None
+    parsed: Any | None = None
 
     @classmethod
     def create(

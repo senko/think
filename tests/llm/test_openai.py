@@ -174,6 +174,8 @@ async def test_call_with_pydantic(AsyncOpenAI):
     response = await client(chat, parser=TestModel)
 
     assert response.text == "Hi!"
+    assert chat.messages[-1].parsed == response
+
     mock_parse.assert_called_once_with(
         model="fake-model",
         messages=BASIC_OPENAI_MESSAGES,
@@ -198,8 +200,9 @@ async def test_call_with_custom_parser(AsyncOpenAI):
         return 0.5
 
     response = await client(chat, parser=custom_parser)
-
     assert response == 0.5
+    assert chat.messages[-1].parsed == response
+
     mock_create.assert_called_once_with(
         model="fake-model",
         messages=BASIC_OPENAI_MESSAGES,

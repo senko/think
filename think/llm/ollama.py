@@ -14,19 +14,14 @@ except ImportError as err:
         "Ollama client requires the Ollama client library: pip install ollama"
     ) from err
 
-from .base import LLM, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class OllamaAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None = None):
-        self.toolkit = toolkit
-
+class OllamaAdapter(BaseAdapter):
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "type": "function",
@@ -36,13 +31,6 @@ class OllamaAdapter:
                 "arguments": tool.schema,
             },
         }
-
-    @property
-    def spec(self) -> list[dict] | None:
-        if self.toolkit is None:
-            return None
-
-        return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
     def dump_message(self, message: Message) -> list[dict[str, str]]:
         message_text = ""
@@ -143,11 +131,11 @@ class OllamaAdapter:
             content=content_parts,
         )
 
-    def dump_chat(self, chat: Chat) -> list[dict]:
+    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
         messages = []
         for m in chat.messages:
             messages.extend(self.dump_message(m))
-        return messages
+        return "", messages
 
     def load_chat(self, messages: list[dict]) -> Chat:
         c = Chat()
@@ -158,6 +146,7 @@ class OllamaAdapter:
 
 class OllamaClient(LLM):
     provider = "ollama"
+    adapter_class = OllamaAdapter
 
     def __init__(
         self,
@@ -169,28 +158,15 @@ class OllamaClient(LLM):
         super().__init__(model, api_key=api_key, base_url=base_url)
         self.client = AsyncClient(base_url)
 
-    async def __call__(
+    async def _internal_call(
         self,
         chat: Chat,
-        *,
-        parser: type[PydanticResultT]
-        | Callable[[str], CustomParserResultT]
-        | None = None,
-        temperature: float | None = None,
-        tools: ToolKit | list[Callable] | None = None,
-        max_retries: int = 3,
-        max_steps: int = 5,
-        max_tokens: int | None = None,
-    ) -> str | PydanticResultT | CustomParserResultT:
-        toolkit = self._get_toolkit(tools)
-
-        adapter = OllamaAdapter(toolkit)
-        messages = adapter.dump_chat(chat)
-
-        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
-        log.debug(f"Making a {self.model} call with messages: {messages}{tools_dbg}")
-        t0 = time()
-
+        temperature: float | None,
+        max_tokens: int | None,
+        adapter: OllamaAdapter,
+        response_format: PydanticResultT | None = None,
+    ) -> Message:
+        _, messages = adapter.dump_chat(chat)
         response = await self.client.chat(
             model=self.model,
             messages=messages,
@@ -201,50 +177,7 @@ class OllamaClient(LLM):
             ),
             tools=adapter.spec,
         )
-        t1 = time()
-        log.debug(f"Received response in {(t1 - t0):.1f}s: {response}")
-
-        message = adapter.parse_message(response.get("message", {}))
-        text, response_list = await self._process_message(chat, message, toolkit)
-
-        if response_list:
-            if max_steps < 1:
-                log.warning("Tool call steps limit reached, stopping")
-            else:
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_steps=max_steps - 1,
-                    max_retries=max_retries,
-                )
-
-        if parser:
-            try:
-                if isinstance(parser, type) and issubclass(parser, BaseModel):
-                    return parser(**json.loads(text))
-                else:
-                    return parser(text)
-
-            except (json.JSONDecodeError, ValidationError, ValueError) as err:
-                log.debug(f"Error parsing response '{text}': {err}")
-
-                if not max_retries:
-                    raise
-
-                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
-                chat.user(error_text)
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_steps=max_steps,
-                    max_retries=max_retries - 1,
-                )
-
-        return text
+        return adapter.parse_message(response.get("message", {}))
 
     async def stream(
         self,
@@ -253,7 +186,7 @@ class OllamaClient(LLM):
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
         adapter = OllamaAdapter()
-        messages = adapter.dump_chat(chat)
+        _, messages = adapter.dump_chat(chat)
 
         log.debug(f"Making a {self.model} stream call with messages: {messages}")
 

@@ -178,6 +178,8 @@ async def test_call_with_pydantic(AsyncClient):
     response = await client(chat, parser=TestModel)
 
     assert response.text == "Hi!"
+    assert chat.messages[-1].parsed == response
+
     mock_chat.assert_called_once_with(
         model="fake-model",
         messages=BASIC_OLLAMA_MESSAGES,
@@ -206,6 +208,8 @@ async def test_call_with_custom_parser(AsyncClient):
     response = await client(chat, parser=custom_parser)
 
     assert response == 0.5
+    assert chat.messages[-1].parsed == response
+
     mock_chat.assert_called_once_with(
         model="fake-model",
         messages=BASIC_OLLAMA_MESSAGES,

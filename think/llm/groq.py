@@ -16,19 +16,14 @@ except ImportError as err:
         "Groq client requires the Groq Python SDK: pip install groq"
     ) from err
 
-from .base import LLM, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class GroqAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None = None):
-        self.toolkit = toolkit
-
+class GroqAdapter(BaseAdapter):
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "type": "function",
@@ -38,13 +33,6 @@ class GroqAdapter:
                 "parameters": tool.schema,
             },
         }
-
-    @property
-    def spec(self) -> list[dict] | None:
-        if self.toolkit is None:
-            return NOT_GIVEN
-
-        return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
     def dump_message(self, message: Message) -> dict:
         role = "assistant" if message.role == Role.assistant else "user"
@@ -111,8 +99,8 @@ class GroqAdapter:
             "content": parts,
         }
 
-    def dump_chat(self, chat: Chat) -> list[dict]:
-        return [self.dump_message(msg) for msg in chat]
+    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
+        return "", [self.dump_message(msg) for msg in chat]
 
     def parse_message(self, message: dict) -> Message:
         role = Role.assistant if message.get("role") == "assistant" else Role.user
@@ -145,6 +133,7 @@ class GroqAdapter:
 
 class GroqClient(LLM):
     provider = "groq"
+    adapter_class = GroqAdapter
 
     def __init__(
         self,
@@ -156,81 +145,23 @@ class GroqClient(LLM):
         super().__init__(model, api_key=api_key, base_url=base_url)
         self.client = AsyncGroq(api_key=api_key, base_url=base_url)
 
-    async def __call__(
+    async def _internal_call(
         self,
         chat: Chat,
-        *,
-        parser: type[PydanticResultT]
-        | Callable[[str], CustomParserResultT]
-        | None = None,
-        temperature: float | None = None,
-        tools: ToolKit | list[Callable] | None = None,
-        max_retries: int = 3,
-        max_steps: int = 5,
-        max_tokens: int | None = None,
-    ) -> str | PydanticResultT | CustomParserResultT:
-        toolkit = self._get_toolkit(tools)
-
-        adapter = GroqAdapter(toolkit)
-        messages = adapter.dump_chat(chat)
-        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
-        log.debug(f"Making a {self.model} call with messages: {messages}{tools_dbg}")
-        t0 = time()
-
+        temperature: float | None,
+        max_tokens: int | None,
+        adapter: GroqAdapter,
+        response_format: PydanticResultT | None = None,
+    ) -> Message:
+        _, messages = adapter.dump_chat(chat)
         response: ChatCompletion = await self.client.chat.completions.create(
             model=self.model,
             messages=messages,
             temperature=NOT_GIVEN if temperature is None else temperature,
-            tools=adapter.spec,
+            tools=adapter.spec or NOT_GIVEN,
             max_tokens=max_tokens,
         )
-        t1 = time()
-
-        raw_message = response.choices[0].message.model_dump()
-        log.debug(f"Received response in {(t1 - t0):.1f}s: {raw_message}")
-
-        message = adapter.parse_message(raw_message)
-        text, response_list = await self._process_message(chat, message, toolkit)
-
-        if response_list:
-            if max_steps < 1:
-                log.warning("Tool call steps limit reached, stopping")
-            else:
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_retries=max_retries,
-                    max_steps=max_steps - 1,
-                    max_tokens=max_tokens,
-                )
-
-        if parser:
-            try:
-                if isinstance(parser, type) and issubclass(parser, BaseModel):
-                    return parser(**json.loads(text))
-                else:
-                    return parser(text)
-
-            except (json.JSONDecodeError, ValidationError, ValueError) as err:
-                log.debug(f"Error parsing response '{text}': {err}")
-
-                if not max_retries:
-                    raise
-
-                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
-                chat.user(error_text)
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_steps=max_steps,
-                    max_retries=max_retries - 1,
-                )
-
-        return text
+        return adapter.parse_message(response.choices[0].message.model_dump())
 
     async def stream(
         self,
@@ -239,7 +170,7 @@ class GroqClient(LLM):
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
         adapter = GroqAdapter()
-        messages = adapter.dump_chat(chat)
+        _, messages = adapter.dump_chat(chat)
 
         log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[

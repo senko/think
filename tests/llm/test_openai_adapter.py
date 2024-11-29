@@ -75,7 +75,8 @@ def test_adapter(chat, expected):
     adapter = OpenAIAdapter()
 
     chat = Chat.load(chat)
-    messages = adapter.dump_chat(chat)
+    system, messages = adapter.dump_chat(chat)
+    assert system == ""
     assert messages == expected
 
     chat2 = adapter.load_chat(messages)

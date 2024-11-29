@@ -16,19 +16,14 @@ except ImportError as err:
         "OpenAI client requires the OpenAI Python SDK: pip install openai"
     ) from err
 
-from .base import LLM, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class OpenAIAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None = None):
-        self.toolkit = toolkit
-
+class OpenAIAdapter(BaseAdapter):
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "type": "function",
@@ -38,13 +33,6 @@ class OpenAIAdapter:
                 "arguments": tool.schema,
             },
         }
-
-    @property
-    def spec(self) -> list[dict] | None:
-        if self.toolkit is None:
-            return NOT_GIVEN
-
-        return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
     def dump_message(self, message: Message) -> list[dict]:
         tool_calls = []
@@ -262,11 +250,11 @@ class OpenAIAdapter:
 
         raise ValueError(f"Unsupported message type: {type(message)}")
 
-    def dump_chat(self, chat: Chat) -> list[dict]:
+    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
         messages = []
         for m in chat.messages:
             messages.extend(self.dump_message(m))
-        return messages
+        return "", messages
 
     def load_chat(self, messages: list[dict]) -> Chat:
         c = Chat()
@@ -277,6 +265,7 @@ class OpenAIAdapter:
 
 class OpenAIClient(LLM):
     provider = "openai"
+    adapter_class = OpenAIAdapter
 
     def __init__(
         self,
@@ -288,101 +277,37 @@ class OpenAIClient(LLM):
         super().__init__(model, api_key=api_key, base_url=base_url)
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
-    async def __call__(
+    async def _internal_call(
         self,
         chat: Chat,
-        *,
-        parser: type[PydanticResultT]
-        | Callable[[str], CustomParserResultT]
-        | None = None,
-        temperature: float | None = None,
-        tools: ToolKit | list[Callable] | None = None,
-        max_retries: int = 3,
-        max_steps: int = 5,
-        max_tokens: int | None = None,
-    ) -> str | PydanticResultT | CustomParserResultT:
-        toolkit = self._get_toolkit(tools)
-
-        if isinstance(parser, type) and issubclass(parser, BaseModel):
-            response_format = parser
-        else:
-            response_format = None
-
-        adapter = OpenAIAdapter(toolkit)
-        messages = adapter.dump_chat(chat)
-        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
-        t0 = time()
+        temperature: float | None,
+        max_tokens: int | None,
+        adapter: OpenAIAdapter,
+        response_format: PydanticResultT | None = None,
+    ) -> Message:
+        _, messages = adapter.dump_chat(chat)
         if response_format:
-            log.debug(
-                f"Making a {self.model} call with messages: {messages}{tools_dbg}"
-                f"expecting {response_format.__name__} response"
-            )
             response = await self.client.beta.chat.completions.parse(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                tools=adapter.spec,
+                tools=adapter.spec or NOT_GIVEN,
                 response_format=response_format,
                 max_completion_tokens=max_tokens or NOT_GIVEN,
             )
         else:
-            log.debug(
-                f"Making a {self.model} call with messages: {messages}{tools_dbg}"
-            )
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=temperature,
-                tools=adapter.spec,
+                tools=adapter.spec or NOT_GIVEN,
                 max_completion_tokens=max_tokens or NOT_GIVEN,
             )
 
-        t1 = time()
-        log.debug(
-            f"Received response in {(t1 - t0):.1f}s: {response.choices[0].message}"
-        )
-
         message = adapter.parse_message(response.choices[0].message.model_dump())
-        text, response_list = await self._process_message(chat, message, toolkit)
-
-        if response_list:
-            if max_steps < 1:
-                log.warning("Tool call steps limit reached, stopping")
-            else:
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_retries=max_retries,
-                    max_steps=max_steps - 1,
-                    max_tokens=max_tokens,
-                )
-
         if response_format and response.choices[0].message.parsed:
-            return response.choices[0].message.parsed
-
-        if parser:
-            try:
-                return parser(text)
-            except ValueError as err:
-                log.debug(f"Error parsing response '{text}': {err}")
-                if not max_retries:
-                    raise
-
-                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
-                chat.user(error_text)
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_retries=max_retries - 1,
-                    max_steps=max_steps,
-                    max_tokens=max_tokens,
-                )
-
-        return text
+            message.parsed = response.choices[0].message.parsed
+        return message
 
     async def stream(
         self,
@@ -391,7 +316,7 @@ class OpenAIClient(LLM):
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
         adapter = OpenAIAdapter()
-        messages = adapter.dump_chat(chat)
+        _, messages = adapter.dump_chat(chat)
         log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[
             ChatCompletionChunk

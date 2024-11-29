@@ -1,7 +1,7 @@
-from enum import Enum
 import json
 import re
-from typing import Union, Optional
+from enum import Enum
+from typing import Optional, Union
 
 from pydantic import BaseModel
 

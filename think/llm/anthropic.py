@@ -4,7 +4,7 @@ from base64 import b64decode
 from json import JSONDecodeError, loads
 from logging import getLogger
 from time import time
-from typing import AsyncGenerator, Callable, Literal
+from typing import Any, AsyncGenerator, Callable, Literal
 
 try:
     from anthropic import NOT_GIVEN, AsyncAnthropic, AsyncStream
@@ -18,32 +18,20 @@ except ImportError as err:
 
 from pydantic import BaseModel, ValidationError
 
-from .base import LLM, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class AnthropicAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None = None):
-        self.toolkit = toolkit
-
+class AnthropicAdapter(BaseAdapter):
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "name": tool.name,
             "description": tool.description,
             "input_schema": tool.schema,
         }
-
-    @property
-    def spec(self) -> list[dict] | None:
-        if self.toolkit is None:
-            return NOT_GIVEN
-
-        return self.toolkit.generate_tool_spec(self.get_tool_spec)
 
     def dump_role(self, role: Role) -> Literal["user", "assistant"]:
         if role in [Role.system, Role.user, Role.tool]:
@@ -177,6 +165,7 @@ class AnthropicAdapter:
 
 class AnthropicClient(LLM):
     provider = "anthropic"
+    adapter_class = AnthropicAdapter
 
     def __init__(
         self,
@@ -188,83 +177,27 @@ class AnthropicClient(LLM):
         super().__init__(model, api_key=api_key, base_url=base_url)
         self.client = AsyncAnthropic(api_key=api_key, base_url=base_url)
 
-    async def __call__(
+    async def _internal_call(
         self,
         chat: Chat,
-        *,
-        parser: type[PydanticResultT]
-        | Callable[[str], CustomParserResultT]
-        | None = None,
-        temperature: float | None = None,
-        tools: ToolKit | list[Callable] | None = None,
-        max_retries: int = 3,
-        max_steps: int = 5,
-        max_tokens: int | None = None,
-    ) -> str | PydanticResultT | CustomParserResultT:
-        toolkit = self._get_toolkit(tools)
-
+        temperature: float | None,
+        max_tokens: int | None,
+        adapter: AnthropicAdapter,
+        response_format: PydanticResultT | None = None,
+    ) -> Message:
         if max_tokens is None:
             max_tokens = 4096
 
-        adapter = AnthropicAdapter(toolkit)
         system_message, messages = adapter.dump_chat(chat)
-        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
-        log.debug(f"Making a {self.model} call with messages: {messages}{tools_dbg}")
-        t0 = time()
         anthropic_message: AnthropicMessage = await self.client.messages.create(
             model=self.model,
             messages=messages,
             temperature=NOT_GIVEN if temperature is None else temperature,
-            tools=adapter.spec,
+            tools=adapter.spec or NOT_GIVEN,
             max_tokens=max_tokens,
             system=system_message,
         )
-        t1 = time()
-
-        anthropic_message = anthropic_message.model_dump()
-        log.debug(f"Received response in {(t1 - t0):.1f}s: {anthropic_message}")
-
-        message = adapter.parse_message(anthropic_message)
-        text, response_list = await self._process_message(chat, message, toolkit)
-
-        if response_list:
-            if max_steps < 1:
-                log.warning("Tool call steps limit reached, stopping")
-            else:
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_steps=max_steps - 1,
-                    max_retries=max_retries,
-                )
-
-        if parser:
-            try:
-                if isinstance(parser, type) and issubclass(parser, BaseModel):
-                    return parser(**loads(text))
-                else:
-                    return parser(text)
-
-            except (JSONDecodeError, ValidationError, ValueError) as err:
-                log.debug(f"Error parsing response '{text}': {err}")
-
-                if not max_retries:
-                    raise
-
-                error_text = f"Error parsing your response: {err}. Please output your response EXACTLY as requested."
-                chat.user(error_text)
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_steps=max_steps,
-                    max_retries=max_retries - 1,
-                )
-
-        return text
+        return adapter.parse_message(anthropic_message.model_dump())
 
     async def stream(
         self,

@@ -81,7 +81,6 @@ def test_adapter(chat, ex_system, expected):
 
     chat = Chat.load(chat)
     system, messages = adapter.dump_chat(chat)
-    print(messages)
     assert system == ex_system
     assert messages == expected
 

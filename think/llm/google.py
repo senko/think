@@ -16,19 +16,14 @@ except ImportError as err:
         "pip install google-generativeai"
     ) from err
 
-from .base import LLM, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 log = getLogger(__name__)
 
 
-class GoogleAdapter:
-    toolkit: ToolKit
-
-    def __init__(self, toolkit: ToolKit | None = None):
-        self.toolkit = toolkit
-
+class GoogleAdapter(BaseAdapter):
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         from copy import deepcopy
 
@@ -55,10 +50,10 @@ class GoogleAdapter:
 
     @property
     def spec(self) -> dict | None:
-        if self.toolkit is None:
+        defs = super().spec
+        if not defs:
             return None
 
-        defs = self.toolkit.generate_tool_spec(self.get_tool_spec)
         return {
             "function_declarations": defs,
         }
@@ -133,11 +128,11 @@ class GoogleAdapter:
             }
         ]
 
-    def dump_chat(self, chat: Chat) -> list[dict]:
+    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
         messages = []
         for m in chat.messages:
             messages.extend(self.dump_message(m))
-        return messages
+        return "", messages
 
     def parse_message(self, message: dict) -> Message:
         role = Role.assistant if message["role"] == "model" else Role.user
@@ -172,6 +167,7 @@ class GoogleAdapter:
 
 class GoogleClient(LLM):
     provider = "google"
+    adapter_class = GoogleAdapter
 
     def __init__(
         self,
@@ -184,26 +180,15 @@ class GoogleClient(LLM):
         genai.configure(api_key=api_key)
         self.client = genai.GenerativeModel(model)
 
-    async def __call__(
+    async def _internal_call(
         self,
         chat: Chat,
-        *,
-        parser: type[PydanticResultT]
-        | Callable[[str], CustomParserResultT]
-        | None = None,
-        temperature: float | None = None,
-        tools: ToolKit | list[Callable] | None = None,
-        max_retries: int = 3,
-        max_steps: int = 5,
-        max_tokens: int | None = None,
-    ) -> str | PydanticResultT | CustomParserResultT:
-        toolkit = self._get_toolkit(tools)
-
-        adapter = GoogleAdapter(toolkit)
-        messages = adapter.dump_chat(chat)
-        tools_dbg = f" and tools {', '.join(toolkit.tool_names)}" if toolkit else ""
-        t0 = time()
-        log.debug(f"Making a {self.model} call with messages: {messages}{tools_dbg}")
+        temperature: float | None,
+        max_tokens: int | None,
+        adapter: GoogleAdapter,
+        response_format: PydanticResultT | None = None,
+    ) -> Message:
+        _, messages = adapter.dump_chat(chat)
         response = await self.client.generate_content_async(
             messages,
             generation_config=genai.GenerationConfig(
@@ -213,27 +198,7 @@ class GoogleClient(LLM):
             stream=False,
             tools=adapter.spec,
         )
-
-        t1 = time()
-        log.debug(f"Received response in {(t1 - t0):.1f}s: {response.candidates[0]}")
-
-        message = adapter.parse_message(response.to_dict()["candidates"][0]["content"])
-        text, response_list = await self._process_message(chat, message, toolkit)
-
-        if response_list:
-            if max_steps < 1:
-                log.warning("Tool call steps limit reached, stopping")
-            else:
-                return await self(
-                    chat,
-                    temperature=temperature,
-                    tools=tools,
-                    parser=parser,
-                    max_retries=max_retries,
-                    max_steps=max_steps - 1,
-                    max_tokens=max_tokens,
-                )
-        return text
+        return adapter.parse_message(response.to_dict()["candidates"][0]["content"])
 
     async def stream(
         self,
@@ -242,7 +207,7 @@ class GoogleClient(LLM):
         max_tokens: int | None = None,
     ) -> AsyncGenerator[str, None]:
         adapter = GoogleAdapter()
-        messages = adapter.dump_chat(chat)
+        _, messages = adapter.dump_chat(chat)
         log.debug(f"Making a {self.model} stream call with messages: {messages}")
         response = await self.client.generate_content_async(
             messages,

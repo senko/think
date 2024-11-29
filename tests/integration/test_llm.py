@@ -59,7 +59,7 @@ async def test_basic_request(url):
 
 @pytest.mark.parametrize("url", model_urls())
 @pytest.mark.asyncio
-async def test_stream_request(url):
+async def test_streaming(url):
     c = Chat("You're a friendly assistant").user("Tell me a joke")
     llm = LLM.from_url(url)
     text = ""
@@ -70,7 +70,7 @@ async def test_stream_request(url):
 
 @pytest.mark.parametrize("url", model_urls())
 @pytest.mark.asyncio
-async def test_tool_request(url):
+async def test_tool_use(url):
     tool_called = False
 
     def get_temperature(city: str) -> str:
@@ -98,7 +98,7 @@ async def test_tool_request(url):
 
 @pytest.mark.parametrize("url", model_urls())
 @pytest.mark.asyncio
-async def test_vision_request(url):
+async def test_vision(url):
     c = Chat("You're a friendly assistant").user(
         "Describe the image in detail",
         images=[TEST_IMG],
@@ -154,5 +154,5 @@ async def test_custom_parser(url):
         """
     )
     llm = LLM.from_url(url)
-    resp = await llm(c, parser=int)
-    assert isinstance(resp, int), f"Expected a number, got `{type(resp).__name__}`"
+    resp = await llm(c, parser=float)
+    assert isinstance(resp, float), f"Expected a number, got `{type(resp).__name__}`"
