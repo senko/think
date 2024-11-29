@@ -318,6 +318,14 @@ class LLM(ABC):
         return text, response_list
 
     @abstractmethod
+    async def _internal_stream(
+        self,
+        chat: Chat,
+        adapter: BaseAdapter,
+        temperature: float | None,
+        max_tokens: int | None,
+    ) -> AsyncGenerator[str, None]: ...
+
     async def stream(
         self,
         chat: Chat,
@@ -329,9 +337,29 @@ class LLM(ABC):
         :param chat: The chat conversation to process
         :param temperature: Optional sampling temperature (0-1)
         :param max_tokens: Optional maximum tokens in response
-        :return: An async generator of response strings
+        :return: An async generator of response string chunks
         """
         ...
+        adapter = self.adapter_class()
+
+        log.debug(f"Making a {self.model} streaming request with {len(chat)} messages")
+        text = ""
+        async for chunk in self._internal_stream(
+            chat,
+            adapter,
+            temperature,
+            max_tokens,
+        ):
+            text += chunk
+            yield chunk
+
+        if text:
+            chat.messages.append(
+                Message(
+                    role=Role.assistant,
+                    content=[ContentPart(type=ContentType.text, text=text)],
+                )
+            )
 
 
 __all__ = [

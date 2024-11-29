@@ -179,16 +179,14 @@ class OllamaClient(LLM):
         )
         return adapter.parse_message(response.get("message", {}))
 
-    async def stream(
+    async def _internal_stream(
         self,
         chat: Chat,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
+        adapter: OllamaAdapter,
+        temperature: float | None,
+        max_tokens: int | None,
     ) -> AsyncGenerator[str, None]:
-        adapter = OllamaAdapter()
         _, messages = adapter.dump_chat(chat)
-
-        log.debug(f"Making a {self.model} stream call with messages: {messages}")
 
         stream = await self.client.chat(
             model=self.model,
@@ -200,30 +198,8 @@ class OllamaClient(LLM):
             ),
         )
 
-        role = Role.assistant
-        text = ""
         async for chunk in stream:
             msg = chunk.get("message", {})
-            if "role" in msg:
-                try:
-                    role = Role(msg["role"])
-                except ValueError:
-                    pass  # just keep the previous role
-
             chunk_text = msg.get("content", "")
             if chunk_text:
-                text += chunk_text
                 yield chunk_text
-
-        if text:
-            chat.messages.append(
-                Message(
-                    role=role,
-                    content=[
-                        ContentPart(
-                            type=ContentType.text,
-                            text=text,
-                        )
-                    ],
-                )
-            )

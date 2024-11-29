@@ -200,15 +200,15 @@ class GoogleClient(LLM):
         )
         return adapter.parse_message(response.to_dict()["candidates"][0]["content"])
 
-    async def stream(
+    async def _internal_stream(
         self,
         chat: Chat,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
+        adapter: GoogleAdapter,
+        temperature: float | None,
+        max_tokens: int | None,
     ) -> AsyncGenerator[str, None]:
-        adapter = GoogleAdapter()
         _, messages = adapter.dump_chat(chat)
-        log.debug(f"Making a {self.model} stream call with messages: {messages}")
+
         response = await self.client.generate_content_async(
             messages,
             generation_config=genai.GenerationConfig(
@@ -218,20 +218,5 @@ class GoogleClient(LLM):
             stream=True,
         )
 
-        text = ""
         async for chunk in response:
-            text += chunk.text
             yield chunk.text
-
-        if text:
-            chat.messages.append(
-                Message(
-                    role=Role.assistant,
-                    content=[
-                        ContentPart(
-                            type=ContentType.text,
-                            text=text,
-                        )
-                    ],
-                )
-            )

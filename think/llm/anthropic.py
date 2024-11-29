@@ -199,19 +199,19 @@ class AnthropicClient(LLM):
         )
         return adapter.parse_message(anthropic_message.model_dump())
 
-    async def stream(
+    async def _internal_stream(
         self,
         chat: Chat,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
+        adapter: AnthropicAdapter,
+        temperature: float | None,
+        max_tokens: int | None,
     ) -> AsyncGenerator[str, None]:
+        _, messages = adapter.dump_chat(chat)
+
+        system_message, messages = adapter.dump_chat(chat)
         if max_tokens is None:
             max_tokens = 4096
 
-        adapter = AnthropicAdapter()
-        system_message, messages = adapter.dump_chat(chat)
-
-        log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[RawMessageStreamEvent] = await self.client.messages.create(
             model=self.model,
             messages=messages,
@@ -220,18 +220,6 @@ class AnthropicClient(LLM):
             system=system_message,
             max_tokens=max_tokens,
         )
-        text = ""
         async for event in stream:
             if event.type == "content_block_delta":
-                text += event.delta.text
                 yield event.delta.text
-            else:
-                log.debug("AnthropicClient.stream(): ignoring unknown chunk %r", event)
-
-        if text:
-            chat.messages.append(
-                Message(
-                    role=Role.assistant,
-                    content=[ContentPart(type=ContentType.text, text=text)],
-                )
-            )

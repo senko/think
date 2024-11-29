@@ -163,16 +163,15 @@ class GroqClient(LLM):
         )
         return adapter.parse_message(response.choices[0].message.model_dump())
 
-    async def stream(
+    async def _internal_stream(
         self,
         chat: Chat,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
+        adapter: GroqAdapter,
+        temperature: float | None,
+        max_tokens: int | None,
     ) -> AsyncGenerator[str, None]:
-        adapter = GroqAdapter()
         _, messages = adapter.dump_chat(chat)
 
-        log.debug(f"Making a {self.model} stream call with messages: {messages}")
         stream: AsyncStream[
             ChatCompletionChunk
         ] = await self.client.chat.completions.create(
@@ -182,17 +181,7 @@ class GroqClient(LLM):
             stream=True,
             max_tokens=max_tokens,
         )
-        text = ""
         async for chunk in stream:
             cd = chunk.choices[0].delta
             if cd.content:
-                text += cd.content
                 yield cd.content
-
-        if text:
-            chat.messages.append(
-                Message(
-                    role=Role.assistant,
-                    content=[ContentPart(type=ContentType.text, text=text)],
-                )
-            )

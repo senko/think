@@ -66,6 +66,7 @@ async def test_streaming(url):
     async for chunk in llm.stream(c):
         text += chunk
     assert text != ""
+    assert text == c.messages[-1].content[0].text
 
 
 @pytest.mark.parametrize("url", model_urls())

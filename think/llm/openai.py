@@ -309,15 +309,15 @@ class OpenAIClient(LLM):
             message.parsed = response.choices[0].message.parsed
         return message
 
-    async def stream(
+    async def _internal_stream(
         self,
         chat: Chat,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
+        adapter: OpenAIAdapter,
+        temperature: float | None,
+        max_tokens: int | None,
     ) -> AsyncGenerator[str, None]:
-        adapter = OpenAIAdapter()
         _, messages = adapter.dump_chat(chat)
-        log.debug(f"Making a {self.model} stream call with messages: {messages}")
+
         stream: AsyncStream[
             ChatCompletionChunk
         ] = await self.client.chat.completions.create(
@@ -327,7 +327,7 @@ class OpenAIClient(LLM):
             stream=True,
             max_completion_tokens=max_tokens or NOT_GIVEN,
         )
-        text = ""
+
         async for chunk in stream:
             if not chunk.choices:
                 continue
@@ -336,22 +336,8 @@ class OpenAIClient(LLM):
             delta = choice.delta
 
             if delta.content is not None:
-                text += delta.content
                 yield delta.content
             elif choice.finish_reason == "stop":
                 pass  # ignore
             else:
                 log.debug("OpenAIClient.stream(): ignoring unknown chunk %r", chunk)
-
-        if text:
-            chat.messages.append(
-                Message(
-                    role=Role.assistant,
-                    content=[
-                        ContentPart(
-                            type=ContentType.text,
-                            text=text,
-                        )
-                    ],
-                )
-            )
