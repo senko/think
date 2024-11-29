@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from base64 import b64decode
-from json import JSONDecodeError, loads
 from logging import getLogger
-from time import time
-from typing import Any, AsyncGenerator, Callable, Literal
+from typing import AsyncGenerator, Literal
 
 try:
     from anthropic import NOT_GIVEN, AsyncAnthropic, AsyncStream
@@ -16,11 +14,10 @@ except ImportError as err:
         "Anthropic client requires the Anthropic Python SDK: pip install anthropic"
     ) from err
 
-from pydantic import BaseModel, ValidationError
 
-from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
-from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
+from .tool import ToolCall, ToolDefinition, ToolResponse
 
 log = getLogger(__name__)
 

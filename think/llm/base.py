@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from json import JSONDecodeError, loads
+from json import JSONDecodeError
 from logging import getLogger
 from time import time
 from typing import AsyncGenerator, Callable, TypeVar, overload

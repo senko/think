@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import json
 from logging import getLogger
-from time import time
-from typing import Any, AsyncGenerator, Callable
+from typing import AsyncGenerator
 
-from pydantic import BaseModel, ValidationError
 
 try:
     from groq import NOT_GIVEN, AsyncGroq, AsyncStream
@@ -16,9 +14,9 @@ except ImportError as err:
         "Groq client requires the Groq Python SDK: pip install groq"
     ) from err
 
-from .base import LLM, BaseAdapter, CustomParserResultT, PydanticResultT
+from .base import LLM, BaseAdapter, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
-from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
+from .tool import ToolCall, ToolDefinition, ToolResponse
 
 log = getLogger(__name__)
 
