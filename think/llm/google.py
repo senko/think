@@ -3,9 +3,9 @@ from __future__ import annotations
 from logging import getLogger
 from typing import AsyncGenerator
 
-
 try:
     import google.generativeai as genai
+    from google.api_core.exceptions import InvalidArgument, NotFound
 
 except ImportError as err:
     raise ImportError(
@@ -13,7 +13,7 @@ except ImportError as err:
         "pip install google-generativeai"
     ) from err
 
-from .base import LLM, BaseAdapter, PydanticResultT
+from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
@@ -186,15 +186,27 @@ class GoogleClient(LLM):
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
-        response = await self.client.generate_content_async(
-            messages,
-            generation_config=genai.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            ),
-            stream=False,
-            tools=adapter.spec,
-        )
+        try:
+            response = await self.client.generate_content_async(
+                messages,
+                generation_config=genai.GenerationConfig(
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                ),
+                stream=False,
+                tools=adapter.spec,
+            )
+        except InvalidArgument as err:
+            if "API_KEY" in err.reason:
+                msg = f"Authentication error: {err.message}"
+            else:
+                msg = f"Invalid argument: {err.message}"
+            raise ConfigError(msg) from err
+        except NotFound as err:
+            raise ConfigError(f"Unknown model: {err.message}") from err
+        except KeyError as err:
+            raise BadRequestError(f"Bad request: {err}") from err
+
         return adapter.parse_message(response.to_dict()["candidates"][0]["content"])
 
     async def _internal_stream(
@@ -206,14 +218,25 @@ class GoogleClient(LLM):
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
 
-        response = await self.client.generate_content_async(
-            messages,
-            generation_config=genai.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            ),
-            stream=True,
-        )
+        try:
+            response = await self.client.generate_content_async(
+                messages,
+                generation_config=genai.GenerationConfig(
+                    temperature=temperature,
+                    max_output_tokens=max_tokens,
+                ),
+                stream=True,
+            )
+        except InvalidArgument as err:
+            if "API_KEY" in err.reason:
+                msg = f"Authentication error: {err.message}"
+            else:
+                msg = f"Invalid argument: {err.message}"
+            raise ConfigError(msg) from err
+        except NotFound as err:
+            raise ConfigError(f"Unknown model: {err.message}") from err
+        except KeyError as err:
+            raise BadRequestError(f"Bad request: {err}") from err
 
         async for chunk in response:
             yield chunk.text

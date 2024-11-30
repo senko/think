@@ -5,7 +5,14 @@ from logging import getLogger
 from typing import AsyncGenerator, Literal
 
 try:
-    from anthropic import NOT_GIVEN, AsyncAnthropic, AsyncStream
+    from anthropic import (
+        NOT_GIVEN,
+        AsyncAnthropic,
+        AsyncStream,
+        AuthenticationError,
+        NotFoundError,
+        BadRequestError as AnthropicBadRequestError,
+    )
     from anthropic.types import Message as AnthropicMessage
     from anthropic.types import RawMessageStreamEvent
     from anthropic.types.image_block_param import Source
@@ -15,7 +22,7 @@ except ImportError as err:
     ) from err
 
 
-from .base import LLM, BaseAdapter, PydanticResultT
+from .base import LLM, BaseAdapter, ConfigError, BadRequestError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
@@ -186,14 +193,25 @@ class AnthropicClient(LLM):
             max_tokens = 4096
 
         system_message, messages = adapter.dump_chat(chat)
-        anthropic_message: AnthropicMessage = await self.client.messages.create(
-            model=self.model,
-            messages=messages,
-            temperature=NOT_GIVEN if temperature is None else temperature,
-            tools=adapter.spec or NOT_GIVEN,
-            max_tokens=max_tokens,
-            system=system_message,
-        )
+
+        try:
+            anthropic_message: AnthropicMessage = await self.client.messages.create(
+                model=self.model,
+                messages=messages,
+                temperature=NOT_GIVEN if temperature is None else temperature,
+                tools=adapter.spec or NOT_GIVEN,
+                max_tokens=max_tokens,
+                system=system_message,
+            )
+        except AuthenticationError as err:
+            raise ConfigError(f"Authentication error: {err.message}") from err
+        except NotFoundError as err:
+            msg = self._error_from_json_response(err.response)
+            raise ConfigError(f"Model not found: {msg}") from err
+        except AnthropicBadRequestError as err:
+            msg = self._error_from_json_response(err.response)
+            raise BadRequestError(f"Bad request: {msg}") from err
+
         return adapter.parse_message(anthropic_message.model_dump())
 
     async def _internal_stream(
@@ -209,14 +227,26 @@ class AnthropicClient(LLM):
         if max_tokens is None:
             max_tokens = 4096
 
-        stream: AsyncStream[RawMessageStreamEvent] = await self.client.messages.create(
-            model=self.model,
-            messages=messages,
-            temperature=NOT_GIVEN if temperature is None else temperature,
-            stream=True,
-            system=system_message,
-            max_tokens=max_tokens,
-        )
+        try:
+            stream: AsyncStream[
+                RawMessageStreamEvent
+            ] = await self.client.messages.create(
+                model=self.model,
+                messages=messages,
+                temperature=NOT_GIVEN if temperature is None else temperature,
+                stream=True,
+                system=system_message,
+                max_tokens=max_tokens,
+            )
+        except AuthenticationError as err:
+            raise ConfigError(f"Authentication error: {err.message}") from err
+        except NotFoundError as err:
+            msg = self._error_from_json_response(err.response)
+            raise ConfigError(f"Model not found: {msg}") from err
+        except AnthropicBadRequestError as err:
+            msg = self._error_from_json_response(err.response)
+            raise BadRequestError(f"Bad request: {msg}") from err
+
         async for event in stream:
             if event.type == "content_block_delta":
                 yield event.delta.text

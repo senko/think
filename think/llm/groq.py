@@ -4,9 +4,15 @@ import json
 from logging import getLogger
 from typing import AsyncGenerator
 
-
 try:
-    from groq import NOT_GIVEN, AsyncGroq, AsyncStream
+    from groq import (
+        NOT_GIVEN,
+        AsyncGroq,
+        AsyncStream,
+        AuthenticationError,
+        NotFoundError,
+        BadRequestError as GroqBadRequestError,
+    )
     from groq.types.chat import ChatCompletion, ChatCompletionChunk
 
 except ImportError as err:
@@ -14,7 +20,7 @@ except ImportError as err:
         "Groq client requires the Groq Python SDK: pip install groq"
     ) from err
 
-from .base import LLM, BaseAdapter, PydanticResultT
+from .base import LLM, BaseAdapter, ConfigError, BadRequestError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
@@ -152,13 +158,24 @@ class GroqClient(LLM):
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
-        response: ChatCompletion = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=NOT_GIVEN if temperature is None else temperature,
-            tools=adapter.spec or NOT_GIVEN,
-            max_tokens=max_tokens,
-        )
+
+        try:
+            response: ChatCompletion = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=NOT_GIVEN if temperature is None else temperature,
+                tools=adapter.spec or NOT_GIVEN,
+                max_tokens=max_tokens,
+            )
+        except AuthenticationError as err:
+            raise ConfigError(f"Authentication error: {err.message}") from err
+        except NotFoundError as err:
+            msg = self._error_from_json_response(err.response)
+            raise ConfigError(f"Model not found: {msg}") from err
+        except GroqBadRequestError as err:
+            msg = self._error_from_json_response(err.response)
+            raise BadRequestError(f"Bad request: {msg}") from err
+
         return adapter.parse_message(response.choices[0].message.model_dump())
 
     async def _internal_stream(
@@ -170,15 +187,25 @@ class GroqClient(LLM):
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
 
-        stream: AsyncStream[
-            ChatCompletionChunk
-        ] = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=NOT_GIVEN if temperature is None else temperature,
-            stream=True,
-            max_tokens=max_tokens,
-        )
+        try:
+            stream: AsyncStream[
+                ChatCompletionChunk
+            ] = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=NOT_GIVEN if temperature is None else temperature,
+                stream=True,
+                max_tokens=max_tokens,
+            )
+        except AuthenticationError as err:
+            raise ConfigError(f"Authentication error: {err.message}") from err
+        except NotFoundError as err:
+            msg = self._error_from_json_response(err.response)
+            raise ConfigError(f"Model not found: {msg}") from err
+        except GroqBadRequestError as err:
+            msg = self._error_from_json_response(err.response)
+            raise BadRequestError(f"Bad request: {msg}") from err
+
         async for chunk in stream:
             cd = chunk.choices[0].delta
             if cd.content:

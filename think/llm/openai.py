@@ -4,9 +4,15 @@ import json
 from logging import getLogger
 from typing import Any, AsyncGenerator
 
-
 try:
-    from openai import NOT_GIVEN, AsyncOpenAI, AsyncStream
+    from openai import (
+        NOT_GIVEN,
+        AsyncOpenAI,
+        AsyncStream,
+        AuthenticationError,
+        NotFoundError,
+        BadRequestError as OpenAIBadRequestError,
+    )
     from openai.types.chat import ChatCompletionChunk
 
 except ImportError as err:
@@ -14,7 +20,7 @@ except ImportError as err:
         "OpenAI client requires the OpenAI Python SDK: pip install openai"
     ) from err
 
-from .base import LLM, BaseAdapter, PydanticResultT
+from .base import LLM, BaseAdapter, ConfigError, BadRequestError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
@@ -284,23 +290,33 @@ class OpenAIClient(LLM):
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
-        if response_format:
-            response = await self.client.beta.chat.completions.parse(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                tools=adapter.spec or NOT_GIVEN,
-                response_format=response_format,
-                max_completion_tokens=max_tokens or NOT_GIVEN,
-            )
-        else:
-            response = await self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                tools=adapter.spec or NOT_GIVEN,
-                max_completion_tokens=max_tokens or NOT_GIVEN,
-            )
+
+        try:
+            if response_format:
+                response = await self.client.beta.chat.completions.parse(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    tools=adapter.spec or NOT_GIVEN,
+                    response_format=response_format,
+                    max_completion_tokens=max_tokens or NOT_GIVEN,
+                )
+            else:
+                response = await self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    tools=adapter.spec or NOT_GIVEN,
+                    max_completion_tokens=max_tokens or NOT_GIVEN,
+                )
+        except AuthenticationError as err:
+            raise ConfigError(f"Authentication error: {err.message}") from err
+        except NotFoundError as err:
+            msg = self._error_from_json_response(err.response)
+            raise ConfigError(f"Model not found: {msg}") from err
+        except OpenAIBadRequestError as err:
+            msg = self._error_from_json_response(err.response)
+            raise BadRequestError(f"Bad request: {msg}") from err
 
         message = adapter.parse_message(response.choices[0].message.model_dump())
         if response_format and response.choices[0].message.parsed:
@@ -316,15 +332,24 @@ class OpenAIClient(LLM):
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
 
-        stream: AsyncStream[
-            ChatCompletionChunk
-        ] = await self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            temperature=temperature,
-            stream=True,
-            max_completion_tokens=max_tokens or NOT_GIVEN,
-        )
+        try:
+            stream: AsyncStream[
+                ChatCompletionChunk
+            ] = await self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=temperature,
+                stream=True,
+                max_completion_tokens=max_tokens or NOT_GIVEN,
+            )
+        except AuthenticationError as err:
+            raise ConfigError(f"Authentication error: {err.message}") from err
+        except NotFoundError as err:
+            msg = self._error_from_json_response(err.response)
+            raise ConfigError(f"Model not found: {msg}") from err
+        except OpenAIBadRequestError as err:
+            msg = self._error_from_json_response(err.response)
+            raise BadRequestError(f"Bad request: {msg}") from err
 
         async for chunk in stream:
             if not chunk.choices:

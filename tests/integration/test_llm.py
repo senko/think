@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from think import LLM
+from think.llm.base import BadRequestError, ConfigError
 from think.llm.chat import Chat
 
 load_dotenv()
@@ -46,6 +47,10 @@ def model_urls() -> list[str]:
     if retval == []:
         raise RuntimeError("No LLM API keys found in environment")
     return retval
+
+
+def api_model_urls() -> list[str]:
+    return [url for url in model_urls() if not url.startswith("ollama:")]
 
 
 @pytest.mark.parametrize("url", model_urls())
@@ -157,3 +162,58 @@ async def test_custom_parser(url):
     llm = LLM.from_url(url)
     resp = await llm(c, parser=float)
     assert isinstance(resp, float), f"Expected a number, got `{type(resp).__name__}`"
+
+
+@pytest.mark.parametrize("url", api_model_urls())
+@pytest.mark.asyncio
+async def test_auth_error(url):
+    c = Chat("You're a friendly assistant").user("Tell me a joke")
+    invalid_key_url = url.replace("///", "//testing-incorrect-key@/")
+    llm = LLM.from_url(invalid_key_url)
+
+    with pytest.raises(ConfigError):
+        await llm(c)
+
+    with pytest.raises(ConfigError):
+        async for _ in llm.stream(c):
+            pass
+
+
+@pytest.mark.parametrize("url", model_urls())
+@pytest.mark.asyncio
+async def test_model_error(url):
+    c = Chat("You're a friendly assistant").user("Tell me a joke")
+    invalid_model_url = url + "-invalid"
+    llm = LLM.from_url(invalid_model_url)
+
+    with pytest.raises(ConfigError):
+        await llm(c)
+
+    with pytest.raises(ConfigError):
+        async for _ in llm.stream(c):
+            pass
+
+
+@pytest.mark.parametrize("url", model_urls())
+@pytest.mark.asyncio
+async def test_chat_error(url):
+    c = Chat("You're a friendly assistant").user("Tell me a joke")
+    llm = LLM.from_url(url)
+
+    class FakeAdapter:
+        spec = None
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def dump_chat(self, chat: Chat):
+            return "", {"messages": "invalid"}
+
+    llm.adapter_class = FakeAdapter
+
+    with pytest.raises(BadRequestError):
+        await llm(c)
+
+    with pytest.raises(BadRequestError):
+        async for _ in llm.stream(c):
+            pass

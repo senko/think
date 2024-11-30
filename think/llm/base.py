@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from json import JSONDecodeError
 from logging import getLogger
 from time import time
-from typing import AsyncGenerator, Callable, TypeVar, overload
+from typing import AsyncGenerator, Callable, TypeVar, overload, TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ValidationError
@@ -18,6 +18,9 @@ CustomParserResultT = TypeVar("CustomParserResultT")
 PydanticResultT = TypeVar("PydanticResultT", bound=BaseModel)
 
 log = getLogger(__name__)
+
+if TYPE_CHECKING:
+    import httpx
 
 
 class BaseAdapter(ABC):
@@ -34,6 +37,45 @@ class BaseAdapter(ABC):
         if self.toolkit is None:
             return None
         return self.toolkit.generate_tool_spec(self.get_tool_spec)
+
+
+class ConfigError(ValueError):
+    """
+    Configuration error
+
+    Encompasses non-recoverable errors due to incorrect
+    configuration values, such as:
+
+    * incorrect or missing API keys
+    * incorrect base URL (if provided)
+    * unrecognized model
+    * invalid parameters
+    """
+
+    message: str
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+class BadRequestError(ValueError):
+    """
+    Bad request error
+
+    Encompasses errors due to incorrect
+    request values, such as:
+
+    * invalid chat messages
+    * invalid tool calls
+    * invalid parameters
+    """
+
+    message: str
+
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
 
 
 class LLM(ABC):
@@ -215,13 +257,21 @@ class LLM(ABC):
 
         # FIXME: error handling!
         t0 = time()
-        message = await self._internal_call(
-            chat,
-            temperature,
-            max_tokens,
-            adapter,
-            response_format=response_format,
-        )
+        try:
+            message = await self._internal_call(
+                chat,
+                temperature,
+                max_tokens,
+                adapter,
+                response_format=response_format,
+            )
+        except ConfigError as err:
+            log.error(
+                f"Error calling {self.provider} API: {err.message}",
+                exc_info=True,
+            )
+            raise
+
         t1 = time()
 
         log.debug(f"Received response in {(t1 - t0):.1f}s")
@@ -344,14 +394,22 @@ class LLM(ABC):
 
         log.debug(f"Making a {self.model} streaming request with {len(chat)} messages")
         text = ""
-        async for chunk in self._internal_stream(
-            chat,
-            adapter,
-            temperature,
-            max_tokens,
-        ):
-            text += chunk
-            yield chunk
+
+        try:
+            async for chunk in self._internal_stream(
+                chat,
+                adapter,
+                temperature,
+                max_tokens,
+            ):
+                text += chunk
+                yield chunk
+        except ConfigError as err:
+            log.error(
+                f"Error calling {self.provider} API: {err.message}",
+                exc_info=True,
+            )
+            raise
 
         if text:
             chat.messages.append(
@@ -360,6 +418,13 @@ class LLM(ABC):
                     content=[ContentPart(type=ContentType.text, text=text)],
                 )
             )
+
+    @staticmethod
+    def _error_from_json_response(response: "httpx.Response") -> str:
+        try:
+            return response.json()["error"]["message"]
+        except (JSONDecodeError, KeyError):
+            return response.text
 
 
 __all__ = [

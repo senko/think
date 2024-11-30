@@ -3,15 +3,14 @@ from __future__ import annotations
 from logging import getLogger
 from typing import Any, AsyncGenerator
 
-
 try:
-    from ollama import AsyncClient, Options
+    from ollama import AsyncClient, Options, ResponseError
 except ImportError as err:
     raise ImportError(
         "Ollama client requires the Ollama client library: pip install ollama"
     ) from err
 
-from .base import LLM, BaseAdapter, PydanticResultT
+from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
@@ -164,16 +163,26 @@ class OllamaClient(LLM):
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
-        response = await self.client.chat(
-            model=self.model,
-            messages=messages,
-            stream=False,
-            options=Options(
-                num_predict=max_tokens,
-                temperature=temperature,
-            ),
-            tools=adapter.spec,
-        )
+
+        try:
+            response = await self.client.chat(
+                model=self.model,
+                messages=messages,
+                stream=False,
+                options=Options(
+                    num_predict=max_tokens,
+                    temperature=temperature,
+                ),
+                tools=adapter.spec,
+            )
+        except ResponseError as err:
+            if err.status_code == 404:
+                raise ConfigError(f"Model not found: {err.error}") from err
+            else:
+                raise BadRequestError(f"Bad request: {err.error}") from err
+        except AttributeError as err:
+            raise BadRequestError(f"Bad request: {err}") from err
+
         return adapter.parse_message(response.get("message", {}))
 
     async def _internal_stream(
@@ -185,18 +194,27 @@ class OllamaClient(LLM):
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
 
-        stream = await self.client.chat(
-            model=self.model,
-            messages=messages,
-            stream=True,
-            options=Options(
-                num_predict=max_tokens,
-                temperature=temperature,
-            ),
-        )
+        try:
+            stream = await self.client.chat(
+                model=self.model,
+                messages=messages,
+                stream=True,
+                options=Options(
+                    num_predict=max_tokens,
+                    temperature=temperature,
+                ),
+            )
 
-        async for chunk in stream:
-            msg = chunk.get("message", {})
-            chunk_text = msg.get("content", "")
-            if chunk_text:
-                yield chunk_text
+            async for chunk in stream:
+                msg = chunk.get("message", {})
+                chunk_text = msg.get("content", "")
+                if chunk_text:
+                    yield chunk_text
+
+        except ResponseError as err:
+            if err.status_code == 404:
+                raise ConfigError(f"Model not found: {err.error}") from err
+            else:
+                raise BadRequestError(f"Bad request: {err.error}") from err
+        except AttributeError as err:
+            raise BadRequestError(f"Bad request: {err}") from err
