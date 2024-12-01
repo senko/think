@@ -1,6 +1,6 @@
 import json
 from typing import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from pydantic import BaseModel

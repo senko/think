@@ -68,6 +68,21 @@ class CodeBlockParser(MultiCodeBlockParser):
 
 
 class JSONParser:
+    """
+    Parse a JSON string into a Python structure or Pydantic model
+
+    If the model is provided, the JSON will be parsed
+    and validated against the model. If the model is
+    not provided, the JSON will be returned as a dict.
+
+    If the JSON is not valid and strict is True (default),
+    a ValueError is raised. If strict is False,
+    None is returned instead.
+
+    The JSON can be provided as a string or inside a
+    Markdown code block.
+    """
+
     def __init__(self, spec: Optional[BaseModel] = None, strict: bool = True):
         self.spec = spec
         self.strict = strict or (spec is not None)
@@ -107,6 +122,16 @@ class JSONParser:
 
 
 class EnumParser:
+    """
+    Parse text into one of possible Enum values.
+
+    If ignore_case is True (default), the text is
+    converted to lowercase before parsing.
+
+    Raises a ValueError if the text does not match
+    any of the Enum values.
+    """
+
     def __init__(self, spec: Enum, ignore_case: bool = True):
         self.spec = spec
         self.ignore_case = ignore_case

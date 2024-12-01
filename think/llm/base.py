@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from json import JSONDecodeError
 from logging import getLogger
 from time import time
-from typing import AsyncGenerator, Callable, TypeVar, overload, TYPE_CHECKING
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, TypeVar, overload
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ValidationError
@@ -24,16 +24,50 @@ if TYPE_CHECKING:
 
 
 class BaseAdapter(ABC):
+    """
+    Abstract base class for the LLM API adapters
+
+    Adapters are responsible for converting the LLM API calls into the
+    format expected by the underlying API. They also handle the conversion
+    of the API responses into the format expected by the LLM.
+    """
+
     toolkit: ToolKit
 
     def __init__(self, toolkit: ToolKit | None = None):
+        """
+        Initialize the adapter.
+
+        :param toolkit: Optional toolkit to provide tool functions
+
+        Toolkit, if provided, is made available to the underlying LLM for tool
+        (function) use.
+        """
         self.toolkit = toolkit
 
     @abstractmethod
-    def get_tool_spec(self, tool: ToolDefinition) -> dict: ...
+    def get_tool_spec(self, tool: ToolDefinition) -> dict:
+        """
+        Get the provider-specific tool specification for a tool definition.
+
+        :param tool: The tool definition
+        :return: The provider-specific tool specification
+        """
+        pass
 
     @property
     def spec(self) -> dict | None:
+        """
+        Generate the provider-specific tool specification for all the
+        tools passed to the LLM.
+
+        Note that some LLM APIs require a sentinel value (NOT_GIVEN) instead
+        of None if no tools are defined. This shouold be handled by the
+        provider-specific LLM client.
+
+        :return: The provider-specific tool specification or None if there
+            are no tools defined.
+        """
         if self.toolkit is None:
             return None
         return self.toolkit.generate_tool_spec(self.get_tool_spec)
@@ -43,8 +77,8 @@ class ConfigError(ValueError):
     """
     Configuration error
 
-    Encompasses non-recoverable errors due to incorrect
-    configuration values, such as:
+    Encompasses non-recoverable errors due to incorrect configuration
+    values, such as:
 
     * incorrect or missing API keys
     * incorrect base URL (if provided)
@@ -63,8 +97,8 @@ class BadRequestError(ValueError):
     """
     Bad request error
 
-    Encompasses errors due to incorrect
-    request values, such as:
+    Encompasses non-recoverable errors due to incorrect request
+    values, such as:
 
     * invalid chat messages
     * invalid tool calls
@@ -79,7 +113,21 @@ class BadRequestError(ValueError):
 
 
 class LLM(ABC):
-    PROVIDERS = ["anthropic", "ollama", "openai"]
+    """
+    LLM client
+
+    This is a base class for the LLM clients. It provides the common
+    functionality for making LLM API calls and processing the responses.
+    The provider-specific LLM clients inherit from this class to implement
+    the provider-specific API calls and response processing.
+
+    Example usage:
+
+    >>> client = LLM.from_url("openai:///gpt-3.5-turbo")
+    >>> client(...)
+    """
+
+    PROVIDERS = ["anthropic", "google", "groq", "ollama", "openai"]
 
     provider: str
     adapter_class: type[BaseAdapter]
@@ -93,12 +141,37 @@ class LLM(ABC):
         api_key: str | None = None,
         base_url: str | None = None,
     ):
+        """
+        Initialize the LLM client.
+
+        This must be called on the provider-specific LLM class:
+
+        >>> client_class = LLM.for_provider("openai")
+        >>> client = client_class("gpt-3.5-turbo", api_key="secret")
+
+        In most cases, you should use the `from_url` class method instead.
+
+        :param model: The model to use
+        :param api_key: Optional API key (if required by the provider and
+            not available in the environment variables)
+        :param base_url: Optional base URL for the provider API
+        """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
 
     @classmethod
     def for_provider(cls, provider: str) -> type["LLM"]:
+        """
+        Get the LLM client class for the specified provider.
+
+        :param provider: The provider name
+        :return: The LLM client class for the provider
+
+        Raises a ValueError if the provider is not supported.
+        The list of supported providers is available in the
+        PROVIDERS class attribute.
+        """
         if provider == "openai":
             from .openai import OpenAIClient
 
@@ -127,6 +200,28 @@ class LLM(ABC):
 
     @classmethod
     def from_url(cls, url: str) -> "LLM":
+        """
+        Initialize an LLM client from a URL.
+
+        Arguments:
+            - `url`: The URL to initialize the client from
+
+        Returns the LLM client instance.
+
+        :param url: The URL to initialize the client from
+        :return: The LLM client instance
+
+        The URL format is: `provider://[api_key@][host[:port]]/model[?query]`
+
+        Examples:
+            - `openai:///gpt-3.5-turbo` (API key in environment)
+            - `openai://sk-my-openai-key@/gpt-3-5-turbo` (explicit API key)
+            - `openai://localhost:1234/v1?model=llama-3.2-8b` (custom server over HTTP)
+            - `openai+https://openrouter.ai/api/v1?model=llama-3.2-8b` (custom server, HTTPS)
+
+        Note that if the base URL is provided, the model must be passed
+        as a query parameter.
+        """
         result = urlparse(url)
         query = parse_qs(result.query) if result.query else {}
 
@@ -135,9 +230,9 @@ class LLM(ABC):
         model = query.get("model", [result.path.lstrip("/")])[0]
         base_url = None
 
-        if provider.endswith("+ssl"):
+        if provider.endswith("+https"):
             base_url_scheme = "https"
-            provider = provider.replace("+ssl", "")
+            provider = provider.replace("+https", "")
 
         if result.hostname:
             base_url_port = f":{result.port}" if result.port else ""
@@ -155,18 +250,6 @@ class LLM(ABC):
             api_key=result.username,
             base_url=base_url,
         )
-
-    def _get_toolkit(
-        self,
-        tools: ToolKit | list[Callable[[str], str]] | None,
-    ) -> ToolKit | None:
-        if tools is None:
-            return None
-
-        if isinstance(tools, ToolKit):
-            return tools
-
-        return ToolKit(tools)
 
     @overload
     async def __call__(
@@ -239,7 +322,13 @@ class LLM(ABC):
         :raises ValueError: If the temperature is not between 0 and 1
         :raises APIError: If there is an error communicating with the API
         """
-        toolkit = self._get_toolkit(tools)
+        if tools is None:
+            toolkit = None
+        elif isinstance(tools, ToolKit):
+            toolkit = tools
+        else:
+            toolkit = ToolKit(tools)
+
         adapter = self.adapter_class(toolkit)
 
         if isinstance(parser, type) and issubclass(parser, BaseModel):
@@ -255,7 +344,6 @@ class LLM(ABC):
             f"Making a {self.model} call with {len(chat)} messages{tools_dbg}{format_dbg}"
         )
 
-        # FIXME: error handling!
         t0 = time()
         try:
             message = await self._internal_call(
@@ -265,7 +353,7 @@ class LLM(ABC):
                 adapter,
                 response_format=response_format,
             )
-        except ConfigError as err:
+        except (ConfigError, BadRequestError) as err:
             log.error(
                 f"Error calling {self.provider} API: {err.message}",
                 exc_info=True,
@@ -329,7 +417,22 @@ class LLM(ABC):
         max_tokens: int | None,
         adapter: BaseAdapter,
         response_format: PydanticResultT | None = None,
-    ) -> Message: ...
+    ) -> Message:
+        """
+        Make the LLM API call - internal implementation.
+
+        Each provider-specific LLM client must implement this
+        method to make the API call to the provider's API.
+
+        :param chat: The chat conversation to process
+        :param temperature: Optional sampling temperature (0-1)
+        :param max_tokens: Optional maximum tokens in response
+        :param adapter: The adapter to convert the chat to the provider format
+        :param response_format: Optional Pydantic model to parse the response into
+            (to be used only if the provider supports structured responses)
+        :return: The response message from the provider
+        """
+        pass
 
     async def _process_message(
         self,
@@ -337,6 +440,21 @@ class LLM(ABC):
         message: Message,
         toolkit: ToolKit,
     ) -> tuple[str, list[ToolResponse]]:
+        """
+        Process the assistant response message - internal implementation.
+
+        This methods appends the response message to the end of the
+        chat and checks for and runs any tool calls requested by the
+        AI assistant.
+
+        If the list of tool responses is non-empty, the LLM client should
+        resend the chat to the API with the tool responses appended.
+
+        :param chat: The chat conversation to process
+        :param message: The response message from the AI assistant
+        :param toolkit: The toolkit to execute tool calls
+        :return: A tuple of the response text and a list of tool responses
+        """
         chat.messages.append(message)
 
         text = ""
@@ -374,7 +492,20 @@ class LLM(ABC):
         adapter: BaseAdapter,
         temperature: float | None,
         max_tokens: int | None,
-    ) -> AsyncGenerator[str, None]: ...
+    ) -> AsyncGenerator[str, None]:
+        """
+        Make a streaming LLM API call - internal implementation.
+
+        Each provider-specific LLM client must implement this method to make
+        the API call to the provider's API and stream the response.
+
+        :param chat: The chat conversation to process
+        :param adapter: The adapter to convert the chat to the provider format
+        :param temperature: Optional sampling temperature (0-1)
+        :param max_tokens: Optional maximum tokens in response
+        :return: An async generator of response string chunks
+        """
+        pass
 
     async def stream(
         self,
@@ -421,6 +552,7 @@ class LLM(ABC):
 
     @staticmethod
     def _error_from_json_response(response: "httpx.Response") -> str:
+        """Get the error message from a JSON response - internal method."""
         try:
             return response.json()["error"]["message"]
         except (JSONDecodeError, KeyError):

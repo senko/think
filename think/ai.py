@@ -63,6 +63,11 @@ async def ask(llm: LLM, prompt: str, **kwargs) -> str:
     Jinja2 template variables that will be rendered with the provided keyword
     arguments. The LLM output will be returned as a string.
 
+    :param llm: The LLM instance to use for the query.
+    :param prompt: The question to ask the LLM.
+    :param kwargs: Keyword arguments to render the prompt template.
+    :return: The LLM output as a string.
+
     Note: use this when you only need the string output of the LLM. If you
     need the output to be parsed into a structure, use `LLMQuery.run()` instead.
     """

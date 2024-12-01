@@ -21,11 +21,24 @@ def strip_block(txt: str) -> str:
 
 
 class FormatTemplate:
+    """
+    Template renderer using str.format
+
+    Instances of this class, when called with a template string
+    and keyword arguments, will render and return the template.
+
+    :param template: The template string to render.
+    :param kwargs: Keyword arguments to pass to str.format.
+    :return: The rendered template string.
+    """
+
     def __call__(self, template: str, **kwargs: dict[str, Any]) -> str:
         return strip_block(template).format(**kwargs)
 
 
 class BaseJinjaTemplate:
+    """Base class for Jinja2 template renderers."""
+
     def __init__(self, loader: Optional[BaseLoader]):
         self.env = Environment(
             loader=loader,
@@ -38,6 +51,17 @@ class BaseJinjaTemplate:
 
 
 class JinjaStringTemplate(BaseJinjaTemplate):
+    """
+    String template renderer using Jinja2
+
+    Instances of this class, when called with a template string
+    and keyword arguments, will render and return the template.
+
+    :param template: The template string to render.
+    :param kwargs: Keyword arguments to pass to the template.
+    :return: The rendered template string.
+    """
+
     def __init__(self):
         super().__init__(None)
 
@@ -47,6 +71,21 @@ class JinjaStringTemplate(BaseJinjaTemplate):
 
 
 class JinjaFileTemplate(BaseJinjaTemplate):
+    """
+    File template renderer using Jinja2
+
+    Instances of this class, when called with a template filename
+    and keyword arguments, will render and return the template.
+
+    Since this class uses the FileSystemLoader, the template
+    may reference other templates using the Jinja2 include or
+    extends statements.
+
+    :param template: The template filename to render.
+    :param kwargs: Keyword arguments to pass to the template.
+    :return: The rendered template string.
+    """
+
     def __init__(self, template_dir: str):
         if not Path(template_dir).is_dir():
             raise ValueError(f"Template directory does not exist: {template_dir}")

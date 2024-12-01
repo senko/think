@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import binascii
+import json
 import re
 from base64 import b64decode, b64encode
 from enum import Enum
@@ -19,6 +20,10 @@ MAGIC_BYTES = {
 
 
 class Role(str, Enum):
+    """
+    Message role (sender identity) in an LLM chat.
+    """
+
     system = "system"
     user = "user"
     assistant = "assistant"
@@ -26,6 +31,10 @@ class Role(str, Enum):
 
 
 class ContentType(str, Enum):
+    """
+    Content type of a part of an LLM chat message.
+    """
+
     text = "text"
     image = "image"
     tool_call = "tool_call"
@@ -45,6 +54,8 @@ class ContentPart(BaseModel):
     Image can be provided as either a data URL, raw image data (bytes),
     or an HTTP(S) URL. If provided as raw image data in supported format
     (PNG or JPEG), it will be automatically converted to a data URL.
+
+    Note: not all content types are supported by all AI models.
     """
 
     type: ContentType
@@ -56,6 +67,7 @@ class ContentPart(BaseModel):
     @field_validator("image", mode="before")
     @classmethod
     def validate_image(cls, v):
+        """Pydantic validator/converter for the image field."""
         if not v:
             return None
 
@@ -135,6 +147,16 @@ class ContentPart(BaseModel):
 class Message(BaseModel):
     """
     A message in an LLM chat.
+
+    Provider-independent representation of a message,
+    to be converted from/to provider-specific format
+    by the appropriate adapter.
+
+    Note: not all roles are supported by all AI models.
+
+    If the LLM call specified a parser and the AI reply
+    was successfully parsed, the `parsed` field will contain
+    the parsed output, otherwise it will be None.
     """
 
     role: Role
@@ -161,7 +183,8 @@ class Message(BaseModel):
         :param text: Text content, if any
         :param images: Image(s) attached to the message, if any
         :param tool_calls: Tool calls, if this is an assistant message
-        :param tool_responses: Tool responses, if this is a tool response message
+        :param tool_responses: Tool responses, if this is a tool response
+            message.
         :return: Message instance
         """
         content = []
@@ -241,50 +264,121 @@ class Message(BaseModel):
 
 
 class Chat:
+    """
+    A conversation with an LLM.
+
+    Provider-independent representation of messages exchanged with
+    the LLM, to be converted from/to provider-specific format
+    by the appropriate adapter.
+    """
+
     messages: list[Message]
 
     def __init__(self, system_message: str | None = None):
+        """
+        Initialize a new chat with an optional system message.
+
+        :param system_message: Optional system message to include
+            in the chat.
+        """
         self.messages = []
         if system_message:
             self.messages.append(Message.system(system_message))
 
     def __iter__(self):
+        """Iterate over the messages in the chat."""
         return iter(self.messages)
 
     def __len__(self):
+        """Return the number of messages in the chat."""
         return len(self.messages)
 
     def __str__(self) -> str:
-        import json
-
+        """Return a JSON representation of the chat."""
         return json.dumps(self.dump())
 
-    def system(self, text: str, images: list[str | bytes] | None = None):
+    def system(self, text: str, images: list[str | bytes] | None = None) -> "Chat":
+        """
+        Add a system message to the chat.
+
+        :param text: The text content of the system message.
+        :param images: Optional, a list of images associated with
+            the message, which can be either strings or bytes.
+        :return: The chat instance, for chaining.
+        """
         self.messages.append(Message.system(text, images))
         return self
 
-    def user(self, text: str | None, images: list[str | bytes] | None = None):
+    def user(self, text: str | None, images: list[str | bytes] | None = None) -> "Chat":
+        """
+        Add a user message to the chat.
+
+        :param text: The text content of the system message.
+        :param images: Optional, a list of images associated with
+            the message, which can be either strings or bytes.
+        :return: The chat instance, for chaining.
+        """
         self.messages.append(Message.user(text, images))
         return self
 
-    def assistant(self, text: str | None, tool_calls: list[ToolCall] | None = None):
+    def assistant(
+        self, text: str | None, tool_calls: list[ToolCall] | None = None
+    ) -> "Chat":
+        """
+        Add an assistant message to the chat.
+
+        :param text: The text content of the assistant message.
+        :param tool_calls: Optional, list of tool calls that the assistant makes.
+        :return: The chat instance, for chaining.
+        """
         self.messages.append(Message.assistant(text, tool_calls))
         return self
 
-    def tool(self, tool_responses: dict[str, str]):
+    def tool(self, tool_responses: dict[str, str]) -> "Chat":
+        """
+        Add a tool response message to the chat.
+
+        :param tool_responses: Dictionary mapping tool call IDs to response content.
+        :return: The chat instance, for chaining.
+        """
         self.messages.append(Message.tool(tool_responses))
         return self
 
     def dump(self) -> list[dict[str, Any]]:
+        """
+        Dump the chat to a JSON-serializable format.
+
+        Note that the format is provider-independent. It's useful for
+        storing and loading chats, but must be converted to the
+        provider-specific format by the appropriate adapter.
+
+        :return: JSON-serializable representation of the chat.
+        """
         return [m.model_dump(exclude_none=True) for m in self.messages]
 
     @classmethod
     def load(cls, data: list[dict[str, Any]]) -> "Chat":
+        """
+        Load a chat from a JSON-serializable format.
+
+        Loads a chat saved using the `dump` method.
+
+        :param data: JSON-serializable representation of the chat.
+        :return: Chat instance.
+        """
         c = cls()
         c.messages = [Message(**m) for m in data]
         return c
 
     def clone(self) -> "Chat":
+        """
+        Return a copy of the chat.
+
+        Performs a deep-copy, so there's no shared state between the
+        original and the cloned chat.
+
+        :return: A copy of the chat.
+        """
         c = Chat()
         c.messages = [m.model_copy(deep=True) for m in self.messages]
         return c

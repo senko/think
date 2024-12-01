@@ -15,6 +15,11 @@ log = getLogger(__name__)
 class ToolDefinition:
     """
     A tool available to the LLM.
+
+    A tool is a function that can be called by the LLM to perform some
+    operation. The tool definition includes the function itself, a name
+    for the tool, a Pydantic model for the function's arguments, and a
+    description of the tool.
     """
 
     name: str
@@ -44,9 +49,12 @@ class ToolDefinition:
         self.description = self.schema.pop("description", None)
 
     @staticmethod
-    def parse_docstring(docstring: str):
+    def parse_docstring(docstring: str) -> dict[str, str]:
         """
         Parse the Sphinx-style docstring and extract parameter descriptions.
+
+        :param docstring: The docstring to parse.
+        :return: A dictionary mapping parameter names to descriptions.
         """
         param_pattern = r":param (\w+): (.+)"
         param_descriptions = {}
@@ -57,7 +65,19 @@ class ToolDefinition:
         return param_descriptions
 
     @classmethod
-    def create_model_from_function(cls, func):
+    def create_model_from_function(cls, func: Callable) -> type[BaseModel]:
+        """
+        Creates a Pydantic model for agiven function.
+
+        This method extracts the function's signature and docstring,
+        parses the docstring for parameter descriptions, and constructs
+        a Pydantic model with fields corresponding to the function's
+        parameters.
+
+        :param func: The function from which to create the model.
+        :return: A Pydantic model class with fields derived from the
+            function's parameters and their annotations.
+        """
         sig = signature(func)
         docstring = getdoc(func)
         param_descriptions = cls.parse_docstring(docstring)
@@ -90,68 +110,96 @@ class ToolDefinition:
 
 @dataclass
 class ToolCall:
+    """
+    A call to a tool.
+
+    Parsed assistant/AI tool call.
+    Contains the tool's ID, name, and arguments.
+    """
+
     id: str
     name: str
     arguments: dict[str, Any]
 
-    @classmethod
-    def from_openai(cls, tool_call: Any):
-        from openai.types.chat import ParsedFunctionToolCall
-
-        assert isinstance(tool_call, ParsedFunctionToolCall)
-
-        return cls(
-            id=tool_call.id,
-            name=tool_call.function.name,
-            arguments=json.loads(tool_call.function.arguments),
-        )
-
-    @classmethod
-    def from_anthropic(cls, block: Any):
-        # assert isinstance(block, ToolUseBlock)
-
-        return cls(
-            id=block.id,
-            name=block.name,
-            arguments=json.dumps(block.input),
-        )
-
-    @property
-    def json_message(self):
-        return {
-            "id": self.id,
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "arguments": self.arguments,
-            },
-        }
-
 
 @dataclass
 class ToolResponse:
+    """
+    A response from a tool call.
+
+    Contains the reference to the tool call, the response string from
+    the tool or an error message if the tool call failed.
+    """
+
     call: ToolCall
     response: str = None
     error: str = None
-    # exception also!
 
 
 class ToolError(Exception):
+    """
+    Tool error that should be passed back to the LLM.
+
+    This exception should be raised by tools when the cause of
+    the error is on the LLM's side. The LLM will be prompted
+    to fix their invocation/arguments and try again.
+    """
+
     pass
 
 
 class ToolKit:
+    """
+    A collection of tools available to the LLM.
+
+    The toolkit is a collection of functions that the LLM can use to
+    perform various operations.
+
+    Both synchronous and asynchronous functions are supported. Async
+    functions will be automatically awaited.
+    """
+
     tools: dict[str, ToolDefinition]
 
     def __init__(self, functions: list[Callable]):
+        """
+        Initialize the toolkit with a list of functions.
+
+        Each function will be introspected to create a tool definition
+        to be used by LLM to decide which tool to use (if any).
+
+        The function should have type annotation for arguments and
+        return value, and a Sphinx-style docstring with :param: and
+        :return: lines to describe the parameters and return value.
+
+        See `ToolDefinition` for more information on the tool definition.
+
+        :param functions: A list of functions to add to the toolkit.
+        """
         tool_defs = [ToolDefinition(func) for func in functions]
         self.tools = {t.name: t for t in tool_defs}
 
     @property
     def tool_names(self) -> list[str]:
+        """Return a list of tool names."""
         return list(self.tools.keys())
 
     async def execute_tool_call(self, call: ToolCall) -> ToolResponse:
+        """
+        Execute a tool call, returning the response or an error message.
+
+        :param call: The tool call containing the tool name and arguments.
+        :return: The response from the tool execution.
+
+        If the function is a coroutine, it will be awaited.
+
+        If the tool call is successful, the response will contain the
+        return value from the tool. If the tool call raises a `ToolError`,
+        the response will contain the error message to pass to the LLM.
+
+        If the tool raises any other exception, the exception will be
+        propagated to the caller (user).
+        """
         tool = self.tools.get(call.name)
         if not tool:
             log.debug(f"Tool call with an unknown tool: {call.name}")
@@ -186,4 +234,5 @@ class ToolKit:
         self,
         formatter: Callable[[list[ToolDefinition]], dict],
     ) -> list[dict]:
+        """Generate tool specifications to pass to the LLM."""
         return [formatter(t) for t in self.tools.values()]
