@@ -140,6 +140,20 @@ pip install think-llm
 
 Note that the package name is `think-llm`, *not* `think`.
 
+You'll also need to install the providers you want to use:
+`openai`, `anthropic`, `google-generativeai`, `groq`, or `ollama`. You
+can install them together with Think via `pip` as well:
+
+```bash
+pip install think-llm[openai]
+pip install think-llm[anthropic]
+pip install think-llm[gemini]
+pip install think-llm[groq]
+pip install think-llm[ollama]
+pip install think-llm[all]  # to install all of them
+pip install think-llm[dev]  # if you want to run the tests or modify Think
+```
+
 You can set up your LLM credentials via environment variables, for example:
 
 ```bash
