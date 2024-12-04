@@ -44,6 +44,8 @@ def model_urls() -> list[str]:
         retval.append("groq:///llama-3.2-90b-vision-preview")
     if getenv("OLLAMA_MODEL"):
         retval.append(f"ollama:///{getenv('OLLAMA_MODEL')}")
+    if getenv("AWS_SECRET_ACCESS_KEY"):
+        retval.append("bedrock:///amazon.nova-lite-v1:0?region=us-east-1")
     if retval == []:
         raise RuntimeError("No LLM API keys found in environment")
     return retval

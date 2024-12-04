@@ -5,7 +5,7 @@ Think is a Python package for creating thinking programs.
 It provides simple but powerful primitives for composable and robust
 integration of Large Language Models (LLMs) into your Python programs.
 
-Think supports OpenAI, Anthropic, Google (Gemini), Groq as LLM
+Think supports OpenAI, Anthropic, Google (Gemini), Amazon (Bedrock) and Groq as LLM
 providers, Ollama for local models, as well as any OpenAI-compatible
 LLM API provider.
 

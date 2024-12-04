@@ -33,6 +33,10 @@ groq = [
 ollama = [
     "ollama>=0.3.3",
 ]
+bedrock = [
+    "aioboto3>=13.2.0",
+]
+
 all = [
     "openai>=1.53.0",
     "anthropic>=0.37.1",

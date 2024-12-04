@@ -140,6 +140,7 @@ class LLM(ABC):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        **kwargs,
     ):
         """
         Initialize the LLM client.
@@ -154,11 +155,13 @@ class LLM(ABC):
         :param model: The model to use
         :param api_key: Optional API key (if required by the provider and
             not available in the environment variables)
+        :param **kwargs: Optional extra parameters for the provider API
         :param base_url: Optional base URL for the provider API
         """
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
+        self.extra_params = kwargs
 
     @classmethod
     def for_provider(cls, provider: str) -> type["LLM"]:
@@ -195,6 +198,11 @@ class LLM(ABC):
             from .groq import GroqClient
 
             return GroqClient
+
+        elif provider == "bedrock":
+            from .bedrock import BedrockClient
+
+            return BedrockClient
         else:
             raise ValueError(f"Unknown provider: {provider}")
 
@@ -218,6 +226,7 @@ class LLM(ABC):
             - `openai://sk-my-openai-key@/gpt-3-5-turbo` (explicit API key)
             - `openai://localhost:1234/v1?model=llama-3.2-8b` (custom server over HTTP)
             - `openai+https://openrouter.ai/api/v1?model=llama-3.2-8b` (custom server, HTTPS)
+            - `bedrock:///amazon.nova-lite-v1:0?region=us-east-1 (AWS region as an extra param)
 
         Note that if the base URL is provided, the model must be passed
         as a query parameter.
@@ -227,7 +236,7 @@ class LLM(ABC):
 
         base_url_scheme = "http"
         provider = result.scheme
-        model = query.get("model", [result.path.lstrip("/")])[0]
+        model = query.pop("model", [result.path.lstrip("/")])[0]
         base_url = None
 
         if provider.endswith("+https"):
@@ -240,15 +249,17 @@ class LLM(ABC):
                 f"{base_url_scheme}://{result.hostname}{base_url_port}{result.path}"
             )
 
-        if base_url and (not result.query or not query.get("model")):
+        if base_url and not result.query:
             raise ValueError(
                 "When providing a base URL, model must be passed as a query parameter"
             )
 
+        extra_params = {k: v[0] for k, v in query.items()}
         return cls.for_provider(result.scheme)(
             model=model,
             api_key=result.username,
             base_url=base_url,
+            **extra_params,
         )
 
     @overload

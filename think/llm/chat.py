@@ -122,6 +122,18 @@ class ContentPart(BaseModel):
         return None
 
     @property
+    def image_bytes(self) -> bytes | None:
+        """
+        Return raw image data if possible.
+
+        For images provided as data URLs, this will return None.
+
+        :return: Raw image data (as byte string), or None
+        """
+        encoded = self.image_data
+        return b64decode(encoded) if encoded else None
+
+    @property
     def image_mime_type(self) -> str | None:
         """
         Return the MIME type of the image if possible.
