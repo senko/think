@@ -83,7 +83,7 @@ class AnthropicAdapter(BaseAdapter):
                     content=response if response is not None else (error or ""),
                 )
             case _:
-                raise ValueError(f"Unknown content type: {part.type}")
+                raise ValueError(f"Unknown content type for: {part}")
 
     def parse_content_part(self, part: dict) -> ContentPart:
         match part:
@@ -221,8 +221,6 @@ class AnthropicClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
     ) -> AsyncGenerator[str, None]:
-        _, messages = adapter.dump_chat(chat)
-
         system_message, messages = adapter.dump_chat(chat)
         if max_tokens is None:
             max_tokens = 4096
