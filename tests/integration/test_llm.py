@@ -39,7 +39,7 @@ def model_urls() -> list[str]:
     if getenv("ANTHROPIC_API_KEY"):
         retval.append("anthropic:///claude-3-haiku-20240307")
     if getenv("GEMINI_API_KEY"):
-        retval.append("google:///gemini-1.5-pro-latest")
+        retval.append("google:///gemini-2.0-flash-exp")
     if getenv("GROQ_API_KEY"):
         retval.append("groq:///llama-3.2-90b-vision-preview")
     if getenv("OLLAMA_MODEL"):
