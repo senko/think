@@ -15,7 +15,7 @@ authors = [
 license = { text = "MIT" }
 homepage = "https://github.com/senko/think"
 repository = "https://github.com/senko/think"
-keywords = ["ai", "llm"]
+keywords = ["ai", "llm", "rag"]
 
 [project.optional-dependencies]
 openai = [
@@ -36,6 +36,15 @@ ollama = [
 bedrock = [
     "aioboto3>=13.2.0",
 ]
+txtai = [
+    "txtai>=8.1.0",
+]
+chromadb = [
+    "chromadb>=0.6.2",
+]
+pinecone = [
+    "pinecone>=5.4.2",
+]
 
 all = [
     "openai>=1.53.0",
@@ -43,6 +52,10 @@ all = [
     "google-generativeai>=0.8.3",
     "groq>=0.12.0",
     "ollama>=0.3.3",
+    "txtai>=8.1.0",
+    "chromadb>=0.6.2",
+    "pinecone>=5.4.2",
+    "pinecone-client>=4.1.2",
 ]
 
 [dependency-groups]
