@@ -11,6 +11,8 @@ try:
         AsyncStream,
         AuthenticationError,
         NotFoundError,
+    )
+    from openai import (
         BadRequestError as OpenAIBadRequestError,
     )
     from openai.types.chat import ChatCompletionChunk
@@ -20,7 +22,7 @@ except ImportError as err:
         "OpenAI client requires the OpenAI Python SDK: pip install openai"
     ) from err
 
-from .base import LLM, BaseAdapter, ConfigError, BadRequestError, PydanticResultT
+from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
