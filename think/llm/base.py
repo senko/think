@@ -211,11 +211,6 @@ class LLM(ABC):
         """
         Initialize an LLM client from a URL.
 
-        Arguments:
-            - `url`: The URL to initialize the client from
-
-        Returns the LLM client instance.
-
         :param url: The URL to initialize the client from
         :return: The LLM client instance
 

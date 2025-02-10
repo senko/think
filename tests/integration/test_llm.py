@@ -27,7 +27,7 @@ if getenv("INTEGRATION_TESTS", "").lower() not in ["true", "yes", "1", "on"]:
     pytest.skip("Skipping integration tests", allow_module_level=True)
 
 
-def model_urls() -> list[str]:
+def model_urls(vision: bool = False) -> list[str]:
     """
     Returns a list of models to test with, based on available API keys.
 
@@ -39,11 +39,14 @@ def model_urls() -> list[str]:
     if getenv("ANTHROPIC_API_KEY"):
         retval.append("anthropic:///claude-3-haiku-20240307")
     if getenv("GEMINI_API_KEY"):
-        retval.append("google:///gemini-2.0-flash-exp")
+        retval.append("google:///gemini-2.0-flash-lite-preview-02-05")
     if getenv("GROQ_API_KEY"):
         retval.append("groq:///llama-3.2-90b-vision-preview")
     if getenv("OLLAMA_MODEL"):
-        retval.append(f"ollama:///{getenv('OLLAMA_MODEL')}")
+        if vision:
+            retval.append(f"ollama:///{getenv('OLLAMA_VISION_MODEL')}")
+        else:
+            retval.append(f"ollama:///{getenv('OLLAMA_MODEL')}")
     if getenv("AWS_SECRET_ACCESS_KEY"):
         retval.append("bedrock:///amazon.nova-lite-v1:0?region=us-east-1")
     if retval == []:
@@ -104,7 +107,7 @@ async def test_tool_use(url):
     assert tool_called, "Expected 'get_temperature' tool to be called"
 
 
-@pytest.mark.parametrize("url", model_urls())
+@pytest.mark.parametrize("url", model_urls(vision=True))
 @pytest.mark.asyncio
 async def test_vision(url):
     c = Chat("You're a friendly assistant").user(
