@@ -255,9 +255,15 @@ class LLM(ABC):
             )
 
         extra_params = {k: v[0] for k, v in query.items()}
+        if result.username and result.password:
+            api_key = f"{result.username}:{result.password}"
+        elif result.username:
+            api_key = result.username
+        else:
+            api_key = None
         return cls.for_provider(result.scheme)(
             model=model,
-            api_key=result.username,
+            api_key=api_key,
             base_url=base_url,
             **extra_params,
         )

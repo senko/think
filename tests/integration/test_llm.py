@@ -1,5 +1,5 @@
 import logging
-from os import getenv
+from os import environ, getenv
 
 import pytest
 from dotenv import load_dotenv
@@ -168,9 +168,13 @@ async def test_custom_parser(url):
 
 @pytest.mark.parametrize("url", api_model_urls())
 @pytest.mark.asyncio
-async def test_auth_error(url):
+async def test_auth_error(url, monkeypatch):
+    for key in environ.keys():
+        if key.endswith("_API_KEY") or key.startswith("AWS_"):
+            monkeypatch.setenv(key, "")
+
     c = Chat("You're a friendly assistant").user("Tell me a joke")
-    invalid_key_url = url.replace("///", "//testing-incorrect-key@/")
+    invalid_key_url = url.replace("///", "//testing-incorrect-key:abc@/")
     llm = LLM.from_url(invalid_key_url)
 
     with pytest.raises(ConfigError):

@@ -6,13 +6,19 @@ from typing import AsyncGenerator, Literal
 
 try:
     from aioboto3 import Session
+    from botocore.exceptions import (
+        ClientError,
+        EndpointConnectionError,
+        NoCredentialsError,
+        ParamValidationError,
+    )
 except ImportError as err:
     raise ImportError(
         "AWS Bedrock client requires the async Boto3 SDK: pip install aioboto3"
     ) from err
 
 
-from .base import LLM, BaseAdapter, PydanticResultT
+from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
 from .chat import Chat, ContentPart, ContentType, Message, Role
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
@@ -198,10 +204,23 @@ class BedrockClient(LLM):
         **kwargs: str,
     ):
         super().__init__(model, api_key=api_key, base_url=base_url)
+
         region = kwargs.get("region")
         if region is None:
             raise ValueError("AWS Bedrock client requires a region to be specified")
-        self.session = Session(region_name=region)
+
+        key_id = None
+        key_secret = None
+        if api_key:
+            if ":" not in api_key:
+                raise ValueError("AWS Bedrock client requires key ID and secret")
+            else:
+                key_id, secret = api_key.split(":", 1)
+        self.session = Session(
+            region_name=region,
+            aws_access_key_id=key_id,
+            aws_secret_access_key=key_secret,
+        )
 
     async def _internal_call(
         self,
@@ -233,8 +252,24 @@ class BedrockClient(LLM):
                     kwargs["toolConfig"] = adapter.spec
 
                 raw_message = await client.converse(**kwargs)
+            except (NoCredentialsError, EndpointConnectionError) as err:
+                raise ConfigError(err.fmt) from err
+            except ClientError as err:
+                error = err.response.get("Error", {})
+                error_code = error.get("Code")
+                error_message = error.get("Message")
+                if error_code in [
+                    "InvalidSignatureException",
+                    "UnrecognizedClientException",
+                ]:
+                    raise ConfigError(
+                        error_message or "Unknown client/credentials error"
+                    )
+                raise
+            except ParamValidationError as err:
+                raise BadRequestError(err.fmt) from err
             except:
-                raise  # FIXME
+                raise
 
         return adapter.parse_message(raw_message["output"]["message"])
 
@@ -267,5 +302,21 @@ class BedrockClient(LLM):
                 async for event in stream:
                     if "contentBlockDelta" in event:
                         yield event["contentBlockDelta"]["delta"]["text"]
+            except (NoCredentialsError, EndpointConnectionError) as err:
+                raise ConfigError(err.fmt) from err
+            except ClientError as err:
+                error = err.response.get("Error", {})
+                error_code = error.get("Code")
+                error_message = error.get("Message")
+                if error_code in [
+                    "InvalidSignatureException",
+                    "UnrecognizedClientException",
+                ]:
+                    raise ConfigError(
+                        error_message or "Unknown client/credentials error"
+                    )
+                raise
+            except ParamValidationError as err:
+                raise BadRequestError(err.fmt) from err
             except:
                 raise
