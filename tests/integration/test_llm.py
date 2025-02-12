@@ -9,6 +9,8 @@ from think import LLM
 from think.llm.base import BadRequestError, ConfigError
 from think.llm.chat import Chat
 
+from conftest import api_model_urls, model_urls
+
 load_dotenv()
 logging.basicConfig(level=logging.DEBUG)
 
@@ -25,37 +27,6 @@ RK5CYII=
 
 if getenv("INTEGRATION_TESTS", "").lower() not in ["true", "yes", "1", "on"]:
     pytest.skip("Skipping integration tests", allow_module_level=True)
-
-
-def model_urls(vision: bool = False) -> list[str]:
-    """
-    Returns a list of models to test with, based on available API keys.
-
-    :return: A list of model URLs based on the available API keys.
-    """
-    retval = []
-    if getenv("OPENAI_API_KEY"):
-        retval.append("openai:///gpt-4o-mini")
-    if getenv("ANTHROPIC_API_KEY"):
-        retval.append("anthropic:///claude-3-haiku-20240307")
-    if getenv("GEMINI_API_KEY"):
-        retval.append("google:///gemini-2.0-flash-lite-preview-02-05")
-    if getenv("GROQ_API_KEY"):
-        retval.append("groq:///llama-3.2-90b-vision-preview")
-    if getenv("OLLAMA_MODEL"):
-        if vision:
-            retval.append(f"ollama:///{getenv('OLLAMA_VISION_MODEL')}")
-        else:
-            retval.append(f"ollama:///{getenv('OLLAMA_MODEL')}")
-    if getenv("AWS_SECRET_ACCESS_KEY"):
-        retval.append("bedrock:///amazon.nova-lite-v1:0?region=us-east-1")
-    if retval == []:
-        raise RuntimeError("No LLM API keys found in environment")
-    return retval
-
-
-def api_model_urls() -> list[str]:
-    return [url for url in model_urls() if not url.startswith("ollama:")]
 
 
 @pytest.mark.parametrize("url", model_urls())
