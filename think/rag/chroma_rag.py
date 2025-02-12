@@ -82,9 +82,9 @@ class ChromaRag(RAG):
 
     async def calculate_similarity(self, query: str, docs: list[str]) -> list[float]:
         inputs = [query] + docs
-        assert (
-            self.collection._embedding_function
-        ), "Cannot calculate similarity without an embedding function"
+        assert self.collection._embedding_function, (
+            "Cannot calculate similarity without an embedding function"
+        )
         vectors = self.collection._embedding_function(inputs)
         query_vector, *doc_vectors = vectors
         similarities = []
