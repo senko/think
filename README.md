@@ -130,6 +130,42 @@ print(run(generate_python_script("sort a list of numbers")))
 For detailed documentation on usage and all available features, please refer to the
 code docstrings and the integration tests.
 
+## Retrieval-Augmented Generation (RAG) support
+
+Think supports RAG using TxtAI, ChromaDB and Pinecone vector databases, and
+provides scaffolding to integrate other RAG providers.
+
+Example usage:
+
+```python
+    from asyncio import run
+
+    from think import LLM
+    from think.rag.base import RAG, RagDocument
+
+    llm = LLM.from_url("openai:///gpt-4o-mini")
+    rag = RAG.for_provider("txtai")(llm)
+
+    async def index_documents():
+        data = [
+            RagDocument(id="a", text="Titanic: A sweeping romantic epic"),
+            RagDocument(id="b", text="The Godfather: A gripping mafia saga"),
+            RagDocument(id="c", text="Forrest Gump: A heartwarming tale of a simple man"),
+        ]
+        await rag.add_documents(data)
+
+    run(index_documents())
+    query = "A movie about a ship that sinks"
+    result = run(rag(query))
+    print(result)
+```
+
+You can extend the specific RAG provider classes to add custom functionality,
+change LLM prompts, add reranking, etc.
+
+RAG evaluation is supported via the `think.rag.eval.RagEval` class, supporting Context Precision,
+Context Recall, Faithfulness and Answer Relevance metrics.
+
 ## Quickstart
 
 Install via `pip`:
@@ -214,5 +250,5 @@ To ensure that your contribution is accepted, please follow these guidelines:
 
 ## Copyright
 
-Copyright (C) 2023-2024. Senko Rasic and Think contributors. You may use and/or distribute
+Copyright (C) 2023-2025. Senko Rasic and Think contributors. You may use and/or distribute
 this project under the terms of MIT license. See the LICENSE file for more details.
