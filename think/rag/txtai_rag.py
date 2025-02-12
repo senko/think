@@ -66,3 +66,6 @@ class TxtAiRag(RAG):
             )
             for result in results
         ]
+
+    async def calculate_similarity(self, query: str, docs: list[str]) -> list[float]:
+        return self.embeddings.similarity(query, docs)

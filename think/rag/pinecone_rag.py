@@ -87,7 +87,6 @@ class PineconeRag(RAG):
                     }
                 )
 
-            # Upsert to Pinecone index
             self.index.upsert(vectors=records)
         except Exception as e:
             raise RuntimeError(f"Failed to add documents to Pinecone: {e}") from e
@@ -98,23 +97,21 @@ class PineconeRag(RAG):
         except Exception as e:
             raise RuntimeError(f"Failed to remove documents from Pinecone: {e}") from e
 
-    async def prepare_query(self, query: str) -> List[float]:
-        prepared_query: str = await super().prepare_query(query)
-        try:
-            embedding = await self._embed_texts([prepared_query], is_query=True)
-            return embedding[0]["values"]
-        except Exception as e:
-            raise RuntimeError(f"Failed to prepare query: {e}") from e
-
     async def fetch_results(
         self,
         user_query: str,
-        prepared_query: List[float],
+        prepared_query: str,
         limit: int,
     ) -> list[RagResult]:
         try:
+            embedding = await self._embed_texts([prepared_query], is_query=True)
+            vector = embedding[0]["values"]
+        except Exception as e:
+            raise RuntimeError(f"Failed to prepare query: {e}") from e
+
+        try:
             response = self.index.query(
-                vector=prepared_query,
+                vector=vector,
                 top_k=limit,
                 include_metadata=True,
             )
@@ -137,3 +134,16 @@ class PineconeRag(RAG):
             return self.index.describe_index_stats()["total_vector_count"]
         except Exception as e:
             raise RuntimeError(f"Failed to count records in Pinecone: {e}") from e
+
+    async def calculate_similarity(self, query: str, docs: list[str]) -> list[float]:
+        vectors = await self._embed_texts([query] + docs)
+        query_vector, *doc_vectors = vectors
+        similarities = []
+        for doc_vector in doc_vectors:
+            similarities.append(
+                self._cosine_similarity(
+                    query_vector["values"],
+                    doc_vector["values"],
+                )
+            )
+        return similarities

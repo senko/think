@@ -54,17 +54,23 @@ class ChromaRag(RAG):
             n_results=limit,
         )
 
+        ids = results.get("ids")
+        docs = results.get("documents")
+        distances = results.get("distances")
+        if not ids or not docs or not distances:
+            return []
+
         documents = []
         for doc_id, text, distance in zip(
-            results["ids"][0],
-            results["documents"][0],
-            results["distances"][0],
+            ids[0],
+            docs[0],
+            distances[0],
         ):
             score = 1.0 - distance
 
             documents.append(
                 RagResult(
-                    doc={"id": doc_id, "text": text},
+                    doc=RagDocument(id=str(doc_id), text=text),
                     score=score,
                 ),
             )
@@ -73,3 +79,20 @@ class ChromaRag(RAG):
 
     async def count(self) -> int:
         return self.collection.count()
+
+    async def calculate_similarity(self, query: str, docs: list[str]) -> list[float]:
+        inputs = [query] + docs
+        assert (
+            self.collection._embedding_function
+        ), "Cannot calculate similarity without an embedding function"
+        vectors = self.collection._embedding_function(inputs)
+        query_vector, *doc_vectors = vectors
+        similarities = []
+        for doc_vector in doc_vectors:
+            similarities.append(
+                self._cosine_similarity(
+                    query_vector["values"],
+                    doc_vector["values"],
+                )
+            )
+        return similarities
