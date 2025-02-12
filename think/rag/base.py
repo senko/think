@@ -1,11 +1,10 @@
+import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TypedDict, TypeVar
+from typing import TypedDict, Any
 
-from ..ai import ask
-from ..llm.base import LLM
-
-PreparedQueryT = TypeVar("PreparedQueryT")
+from think.ai import ask
+from think.llm.base import LLM
 
 
 class RagDocument(TypedDict):
@@ -45,6 +44,7 @@ class RAG(ABC):
     def __init__(
         self,
         llm: LLM,
+        **kwargs: Any,
     ):
         self.llm = llm
 
@@ -64,7 +64,7 @@ class RAG(ABC):
         :param ids: Document IDs to remove.
         """
 
-    async def prepare_query(self, query: str) -> PreparedQueryT:
+    async def prepare_query(self, query: str) -> str:
         """
         Process user input into query suitable for semantic search.
 
@@ -79,7 +79,7 @@ class RAG(ABC):
     async def fetch_results(
         self,
         user_query: str,
-        prepared_query: PreparedQueryT,
+        prepared_query: str,
         limit: int,
     ) -> list[RagResult]:
         """
@@ -102,10 +102,30 @@ class RAG(ABC):
         """
         return await ask(self.llm, self.ANSWER_PROMPT, results=results, query=query)
 
+    async def rerank(self, results: list[RagResult]) -> list[RagResult]:
+        """
+        Rerank the search results based on the user query.
+
+        :param results: Search results.
+        :return: Reranked search results
+        """
+        return results
+
     async def __call__(self, query: str, limit: int = 10) -> str:
         prepared_query = await self.prepare_query(query)
         results = await self.fetch_results(query, prepared_query, limit)
-        return await self.get_answer(query, results)
+        reranked_results = await self.rerank(results)
+        return await self.get_answer(query, reranked_results)
+
+    @abstractmethod
+    async def calculate_similarity(self, query: str, docs: list[str]) -> list[float]:
+        """
+        Calculate the similarity between the query and the text.
+
+        :param query: User input.
+        :param text: Text to compare.
+        :return: Similarity score.
+        """
 
     @abstractmethod
     async def count(self) -> int:
@@ -144,3 +164,29 @@ class RAG(ABC):
 
         else:
             raise ValueError(f"Unknown provider: {provider}")
+
+    @staticmethod
+    def _cosine_similarity(a: list[float], b: list[float]):
+        """
+        Compute cosine similarity between two vectors of equal length.
+
+        :param a: First vector
+        :param b: Second vector
+        :return: Cosine similarity between the two vectors
+        """
+        if len(a) != len(b):
+            raise ValueError("Vectors must be of equal length")
+
+        # Compute dot product
+        dot_product = sum(x * y for x, y in zip(a, b))
+
+        # Compute magnitudes
+        magnitude1 = math.sqrt(sum(x * x for x in a))
+        magnitude2 = math.sqrt(sum(x * x for x in b))
+
+        # Prevent division by zero
+        if magnitude1 == 0 or magnitude2 == 0:
+            return 0.0
+
+        # Compute cosine similarity
+        return dot_product / (magnitude1 * magnitude2)
