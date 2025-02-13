@@ -1,6 +1,6 @@
 [project]
 name = "think-llm"
-version = "0.0.7"
+version = "0.0.8"
 description = "Create programs that think, using LLMs."
 readme = "README.md"
 requires-python = ">=3.10"
