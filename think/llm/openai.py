@@ -45,6 +45,7 @@ class OpenAIAdapter(BaseAdapter):
         tool_responses = {}
         text_parts = []
         image_parts = []
+        doc_parts = []
 
         for part in message.content:
             match part:
@@ -85,6 +86,22 @@ class OpenAIAdapter(BaseAdapter):
                         )
                     )
 
+                case ContentPart(type=ContentType.document):
+                    if part.is_document_url:
+                        raise ValueError("OpenAI API does not support document URLs")
+
+                    mime_type = part.document_mime_type
+                    if mime_type != "application/pdf":
+                        raise ValueError(f"Unsupported document MIME type: {mime_type}")
+
+                    doc_parts.append(
+                        dict(
+                            type="input_file",
+                            file_name="document.pdf",
+                            file_data=part.document_data,
+                        )
+                    )
+
         if tool_responses:
             return [
                 dict(
@@ -112,7 +129,7 @@ class OpenAIAdapter(BaseAdapter):
             return [dict(role="system", content=text_parts)]
 
         if message.role == Role.user:
-            content = text_parts + image_parts
+            content = text_parts + image_parts + doc_parts
             if len(content) == 1 and content[0]["type"] == "text":
                 content = content[0]["text"]
             return [
@@ -247,6 +264,13 @@ class OpenAIAdapter(BaseAdapter):
                             ContentPart(
                                 type=ContentType.image,
                                 image=part.get("image_url", {}).get("url"),
+                            )
+                        )
+                    elif part_type == "input_file":
+                        content.append(
+                            ContentPart(
+                                type=ContentType.document,
+                                document=part.get("file_data"),
                             )
                         )
                     else:

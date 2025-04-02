@@ -1,6 +1,12 @@
 import pytest
 
-from tests.llm.test_chat import BASIC_CHAT, IMAGE_CHAT, SIMPLE_TOOL_CHAT
+from tests.llm.test_chat import (
+    BASIC_CHAT,
+    IMAGE_CHAT,
+    SIMPLE_TOOL_CHAT,
+    DOCUMENT_CHAT,
+    PDF_URI,
+)
 from think.llm.chat import Chat
 from think.llm.openai import OpenAIAdapter
 
@@ -62,6 +68,25 @@ IMAGE_OPENAI_MESSAGES = [
     },
 ]
 
+DOCUMENT_OPENAI_MESSAGES = [
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe the document in detail"},
+            {
+                "type": "input_file",
+                "file_name": "document.pdf",
+                "file_data": PDF_URI.split(",", 1)[1],
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": "The document is one page long and contains text HELLO WORLD.",
+        "tool_calls": None,
+    },
+]
+
 
 @pytest.mark.parametrize(
     "chat,expected",
@@ -69,6 +94,7 @@ IMAGE_OPENAI_MESSAGES = [
         (BASIC_CHAT, BASIC_OPENAI_MESSAGES),
         (SIMPLE_TOOL_CHAT, SIMPLE_TOOL_OPENAI_MESSAGES),
         (IMAGE_CHAT, IMAGE_OPENAI_MESSAGES),
+        (DOCUMENT_CHAT, DOCUMENT_OPENAI_MESSAGES),
     ],
 )
 def test_adapter(chat, expected):

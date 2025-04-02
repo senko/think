@@ -59,6 +59,19 @@ class AnthropicAdapter(BaseAdapter):
                         media_type=part.image_mime_type,
                     ),
                 )
+            case ContentPart(type=ContentType.document):
+                if part.is_document_url:
+                    source = Source(
+                        type="url",
+                        url=part.document_url,
+                    )
+                else:
+                    source = Source(
+                        type="base64",
+                        data=part.document_data,
+                        media_type=part.document_mime_type,
+                    )
+                return dict(type="document", source=source)
             case ContentPart(
                 type=ContentType.tool_call,
                 tool_call=ToolCall(id=id, name=name, arguments=arguments),
@@ -93,6 +106,16 @@ class AnthropicAdapter(BaseAdapter):
                 return ContentPart(
                     type=ContentType.image,
                     image=b64decode(data.encode("ascii")),
+                )
+            case {"type": "document", "source": {"data": data}}:
+                return ContentPart(
+                    type=ContentType.document,
+                    document=b64decode(data.encode("ascii")),
+                )
+            case {"type": "document", "source": {"url": url}}:
+                return ContentPart(
+                    type=ContentType.document,
+                    document=url,
                 )
             case {"type": "tool_use", "id": id, "name": name, "input": input}:
                 return ContentPart(

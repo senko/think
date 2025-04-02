@@ -1,6 +1,12 @@
 import pytest
+from base64 import b64encode
 
 from think.llm.chat import Chat
+
+PDF_URI = (
+    "data:application/pdf;base64,"
+    + b64encode(open("tests/data/hello.pdf", "rb").read()).decode()
+)
 
 BASIC_CHAT = [
     {
@@ -95,6 +101,28 @@ IMAGE_CHAT = [
     },
 ]
 
+DOCUMENT_CHAT = [
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe the document in detail"},
+            {
+                "type": "document",
+                "document": PDF_URI,
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "text",
+                "text": "The document is one page long and contains text HELLO WORLD.",
+            }
+        ],
+    },
+]
+
 
 @pytest.mark.parametrize(
     "chat",
@@ -102,6 +130,7 @@ IMAGE_CHAT = [
         BASIC_CHAT,
         SIMPLE_TOOL_CHAT,
         IMAGE_CHAT,
+        DOCUMENT_CHAT,
     ],
 )
 def test_parse_dump_chat(chat):

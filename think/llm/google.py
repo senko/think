@@ -82,6 +82,17 @@ class GoogleAdapter(BaseAdapter):
                                 }
                             }
                         )
+                case ContentPart(type=ContentType.document):
+                    if part.is_document_url:
+                        raise ValueError("Google API does not support document URLs")
+                    parts.append(
+                        {
+                            "inline_data": {
+                                "mime_type": part.document_mime_type,
+                                "data": part.document_data,
+                            }
+                        }
+                    )
                 case ContentPart(type=ContentType.tool_call, tool_call=tool_call):
                     parts.append(
                         {

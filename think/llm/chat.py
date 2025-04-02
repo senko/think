@@ -13,9 +13,12 @@ from pydantic import BaseModel, field_validator
 from .tool import ToolCall, ToolResponse
 
 DATA_URI_MIME_TYPE_PATTERN = re.compile(r"data:([^;]+);base64")
-MAGIC_BYTES = {
+IMAGE_MAGIC_BYTES = {
     "image/jpeg": b"\xff\xd8\xff\xe0",
     "image/png": b"\x89PNG\x0d\x0a\x1a\x0a",
+}
+DOCUMENT_MAGIC_BYTES = {
+    "application/pdf": b"%PDF-",
 }
 
 
@@ -37,8 +40,81 @@ class ContentType(str, Enum):
 
     text = "text"
     image = "image"
+    document = "document"
     tool_call = "tool_call"
     tool_response = "tool_response"
+
+
+def _validate_file(value: Any, type_desc: str, magic_bytes: dict[str, bytes]) -> str:
+    """Generic file validator/converter for image/document fields."""
+
+    if not value:
+        return None
+
+    if isinstance(value, str):
+        for scheme in ["data", "http", "https"]:
+            if value.startswith(f"{scheme}:"):
+                return value
+
+        try:
+            value = b64decode(value)
+        except (ValueError, binascii.Error):
+            raise ValueError(
+                f"{type_desc.title()} should be data:, http: or https: URL or base64-encoded raw {type_desc} data"
+            )
+
+    if not isinstance(value, bytes):
+        raise ValueError(
+            f"{type_desc.title()} should be a string (URL) or bytes (raw {type_desc} data)"
+        )
+
+    for typ, magic in magic_bytes.items():
+        if value.startswith(magic):
+            mime_type = typ
+            break
+    else:
+        raise ValueError(f"Unsupported {type_desc} format")
+
+    return f"data:{mime_type};base64,{b64encode(value).decode('ascii')}"
+
+
+def _get_file_b64(data: str) -> str | None:
+    """
+    Return base64-encoded file data if possible.
+
+    For files provided as HTTP(S) URLs, this will return None.
+
+    :return: Base64-encoded file data or None
+    """
+    if not data:
+        return None
+
+    if data.startswith("data:"):
+        return data.split(",", 1)[1]
+
+    return None
+
+
+def _get_file_mime_type(data: str) -> str | None:
+    """
+    Return the MIME type of the file if possible.
+
+    :return: MIME type of the file or None
+    """
+
+    if not data:
+        return None
+
+    # If it's a data URL, extract the mime type
+    m = DATA_URI_MIME_TYPE_PATTERN.match(data)
+    if m:
+        return m.group(1)
+
+    # Otherwise, try to guess based off the URL
+    if data.startswith("http:"):
+        return guess_type(data)[0]
+
+    return None
 
 
 class ContentPart(BaseModel):
@@ -48,12 +124,15 @@ class ContentPart(BaseModel):
     * `text`: Textual content
     * `image`: Image (PNG or JPG) as a data URL or HTTP/HTTPS URL
         (HTTP/HTTPS supported only by OpenAI)
+    * `document`: Document in PDF format, as a data URL or HTTP/HTTPS URL
+        (HTTP/HTTPS supported only by OpenAI)
     * `tool_call`: Tool call made by the assistant
     * `tool_response`: Tool response (provided by the client)
 
-    Image can be provided as either a data URL, raw image data (bytes),
-    or an HTTP(S) URL. If provided as raw image data in supported format
-    (PNG or JPEG), it will be automatically converted to a data URL.
+    Image/document can be provided as either a data URL, raw data (bytes),
+    or an HTTP(S) URL. If provided as raw data in supported format
+    (PNG or JPEG for images, PDF for documents), it will be
+    automatically converted to a data URL.
 
     Note: not all content types are supported by all AI models.
     """
@@ -61,6 +140,7 @@ class ContentPart(BaseModel):
     type: ContentType
     text: str | None = None
     image: str | None = None
+    document: str | None = None
     tool_call: ToolCall | None = None
     tool_response: ToolResponse | None = None
 
@@ -68,32 +148,7 @@ class ContentPart(BaseModel):
     @classmethod
     def validate_image(cls, v):
         """Pydantic validator/converter for the image field."""
-        if not v:
-            return None
-
-        if isinstance(v, str):
-            for scheme in ["data", "http", "https"]:
-                if v.startswith(f"{scheme}:"):
-                    return v
-
-            try:
-                v = b64decode(v)
-            except (ValueError, binascii.Error):
-                raise ValueError(
-                    "Image should be data:, http: or https: URL or base64-encoded raw image data"
-                )
-
-        if not isinstance(v, bytes):
-            raise ValueError("Image should be a string (URL) or bytes (raw image data)")
-
-        for typ, magic in MAGIC_BYTES.items():
-            if v.startswith(magic):
-                mime_type = typ
-                break
-        else:
-            raise ValueError("Unsupported image format")
-
-        return f"data:{mime_type};base64,{b64encode(v).decode('ascii')}"
+        return _validate_file(v, "image", IMAGE_MAGIC_BYTES)
 
     @property
     def is_image_url(self) -> bool:
@@ -113,13 +168,7 @@ class ContentPart(BaseModel):
 
         :return: Base64-encoded image data or None
         """
-        if not self.image:
-            return None
-
-        if self.image.startswith("data:"):
-            return self.image.split(",", 1)[1]
-
-        return None
+        return _get_file_b64(self.image)
 
     @property
     def image_bytes(self) -> bytes | None:
@@ -140,20 +189,54 @@ class ContentPart(BaseModel):
 
         :return: MIME type of the image or None
         """
+        return _get_file_mime_type(self.image)
 
-        if not self.image:
-            return None
+    @field_validator("document", mode="before")
+    @classmethod
+    def validate_document(cls, v):
+        """Pydantic validator/converter for the document field."""
+        return _validate_file(v, "document", DOCUMENT_MAGIC_BYTES)
 
-        # If it's a data URL, extract the mime type
-        m = DATA_URI_MIME_TYPE_PATTERN.match(self.image)
-        if m:
-            return m.group(1)
+    @property
+    def is_document_url(self) -> bool:
+        """
+        Return True if the document is an HTTP(S) URL.
 
-        # Otherwise, try to guess based off the URL
-        if self.image.startswith("http:"):
-            return guess_type(self.image)[0]
+        :return: True if the document is an HTTP(S) URL
+        """
+        return self.document and self.document.startswith(("http:", "https:"))
 
-        return None
+    @property
+    def document_data(self) -> str | None:
+        """
+        Return base64-encoded document data if possible.
+
+        For documents provided as HTTP(S) URLs, this will return None.
+
+        :return: Base64-encoded document data or None
+        """
+        return _get_file_b64(self.document)
+
+    @property
+    def document_bytes(self) -> bytes | None:
+        """
+        Return raw document data if possible.
+
+        For documents provided as HTTP(S) URLs, this will return None.
+
+        :return: Raw document data (as byte string), or None
+        """
+        encoded = self.document_data
+        return b64decode(encoded) if encoded else None
+
+    @property
+    def document_mime_type(self) -> str | None:
+        """
+        Return the MIME type of the document if possible.
+
+        :return: MIME type of the document or None
+        """
+        return _get_file_mime_type(self.document)
 
 
 class Message(BaseModel):
@@ -182,6 +265,7 @@ class Message(BaseModel):
         *,
         text: str | None = None,
         images: list[str | bytes] | None = None,
+        documents: list[str | bytes] | None = None,
         tool_calls: list[ToolCall] | None = None,
         tool_responses: dict[str, str] | None = None,
     ) -> "Message":
@@ -194,6 +278,7 @@ class Message(BaseModel):
         :param role: Role of the message
         :param text: Text content, if any
         :param images: Image(s) attached to the message, if any
+        :param documents: Document(s) attached to the message, if any
         :param tool_calls: Tool calls, if this is an assistant message
         :param tool_responses: Tool responses, if this is a tool response
             message.
@@ -205,6 +290,14 @@ class Message(BaseModel):
         if images:
             for image in images:
                 content.append(ContentPart(type=ContentType.image, image=image))
+        if documents:
+            for document in documents:
+                content.append(
+                    ContentPart(
+                        type=ContentType.document,
+                        document=document,
+                    )
+                )
         if tool_calls:
             for call in tool_calls:
                 content.append(ContentPart(type=ContentType.tool_call, tool_call=call))
@@ -226,28 +319,47 @@ class Message(BaseModel):
         return cls(role=role, content=content)
 
     @classmethod
-    def system(cls, text: str, images: list[str | bytes] | None = None) -> "Message":
+    def system(
+        cls,
+        text: str,
+        images: list[str | bytes] | None = None,
+        documents: list[str | bytes] | None = None,
+    ) -> "Message":
         """
         Creates a system message with the given text and optional images.
 
         :param text: The text content of the system message.
         :param images: Optional, a list of images associated with the message,
             which can be either strings or bytes.
+        :param documents: Optional, a list of documents associated with the message,
+            which can be either strings or bytes.
         :return: A new Message instance.
         """
-        return cls.create(Role.system, text=text, images=images)
+        return cls.create(
+            Role.system,
+            text=text,
+            images=images,
+            documents=documents,
+        )
 
     @classmethod
-    def user(cls, text: str, images: list[str | bytes] | None = None) -> "Message":
+    def user(
+        cls,
+        text: str | None,
+        images: list[str | bytes] | None = None,
+        documents: list[str | bytes] | None = None,
+    ) -> "Message":
         """
         Creates a user message with the given text and optional images.
 
         :param text: The text content of the message.
         :param images: Optional, a list of images associated with the message,
             which can be either strings or bytes.
+        :param documents: Optional, a list of documents associated with the message,
+            which can be either strings or bytes.
         :return: A new Message instance.
         """
-        return cls.create(Role.user, text=text, images=images)
+        return cls.create(Role.user, text=text, images=images, documents=documents)
 
     @classmethod
     def assistant(
@@ -309,28 +421,42 @@ class Chat:
         """Return a JSON representation of the chat."""
         return json.dumps(self.dump())
 
-    def system(self, text: str, images: list[str | bytes] | None = None) -> "Chat":
+    def system(
+        self,
+        text: str,
+        images: list[str | bytes] | None = None,
+        documents: list[str | bytes] | None = None,
+    ) -> "Chat":
         """
         Add a system message to the chat.
 
         :param text: The text content of the system message.
         :param images: Optional, a list of images associated with
             the message, which can be either strings or bytes.
+        :param documents: Optional, a list of documents associated with
+            the message, which can be either strings or bytes.
         :return: The chat instance, for chaining.
         """
-        self.messages.append(Message.system(text, images))
+        self.messages.append(Message.system(text, images, documents))
         return self
 
-    def user(self, text: str | None, images: list[str | bytes] | None = None) -> "Chat":
+    def user(
+        self,
+        text: str | None,
+        images: list[str | bytes] | None = None,
+        documents: list[str | bytes] | None = None,
+    ) -> "Chat":
         """
         Add a user message to the chat.
 
         :param text: The text content of the system message.
         :param images: Optional, a list of images associated with
             the message, which can be either strings or bytes.
+        :param documents: Optional, a list of documents associated with
+            the message, which can be either strings or bytes.
         :return: The chat instance, for chaining.
         """
-        self.messages.append(Message.user(text, images))
+        self.messages.append(Message.user(text, images, documents))
         return self
 
     def assistant(

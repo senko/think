@@ -1,7 +1,13 @@
 import pytest
 from anthropic import NOT_GIVEN
 
-from tests.llm.test_chat import BASIC_CHAT, IMAGE_CHAT, SIMPLE_TOOL_CHAT
+from tests.llm.test_chat import (
+    BASIC_CHAT,
+    IMAGE_CHAT,
+    SIMPLE_TOOL_CHAT,
+    DOCUMENT_CHAT,
+    PDF_URI,
+)
 from think.llm.anthropic import AnthropicAdapter
 from think.llm.chat import Chat
 
@@ -68,12 +74,35 @@ IMAGE_ANTHROPIC_MESSAGES = [
 ]
 
 
+DOCUMENT_ANTHROPIC_MESSAGES = [
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe the document in detail"},
+            {
+                "type": "document",
+                "source": {
+                    "type": "base64",
+                    "data": PDF_URI.split(",", 1)[1],
+                    "media_type": "application/pdf",
+                },
+            },
+        ],
+    },
+    {
+        "role": "assistant",
+        "content": "The document is one page long and contains text HELLO WORLD.",
+    },
+]
+
+
 @pytest.mark.parametrize(
     "chat,ex_system,expected",
     [
         (BASIC_CHAT, BASIC_ANTHROPIC_SYSTEM, BASIC_ANTHROPIC_MESSAGES),
         (SIMPLE_TOOL_CHAT, BASIC_ANTHROPIC_SYSTEM, SIMPLE_TOOL_ANTHROPIC_MESSAGES),
         (IMAGE_CHAT, NOT_GIVEN, IMAGE_ANTHROPIC_MESSAGES),
+        (DOCUMENT_CHAT, NOT_GIVEN, DOCUMENT_ANTHROPIC_MESSAGES),
     ],
 )
 def test_adapter(chat, ex_system, expected):

@@ -28,6 +28,8 @@ RK5CYII=
 if getenv("INTEGRATION_TESTS", "").lower() not in ["true", "yes", "1", "on"]:
     pytest.skip("Skipping integration tests", allow_module_level=True)
 
+TEST_PDF = open("tests/data/hello.pdf", "rb").read()
+
 
 @pytest.mark.parametrize("url", model_urls())
 @pytest.mark.asyncio
@@ -197,3 +199,18 @@ async def test_chat_error(url):
     with pytest.raises(BadRequestError):
         async for _ in llm.stream(c):
             pass
+
+
+@pytest.mark.parametrize(
+    "url",
+    [url for url in model_urls() if "google" in url],
+)
+@pytest.mark.asyncio
+async def test_gemini_ocr(url, vision=True):
+    c = Chat("You're an OCR engine").user(
+        "Read the provided document and return the text",
+        documents=[TEST_PDF],
+    )
+    llm = LLM.from_url(url)
+    resp = await llm(c)
+    assert "hello world" in resp.lower()
