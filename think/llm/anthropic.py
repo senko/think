@@ -15,7 +15,6 @@ try:
     )
     from anthropic.types import Message as AnthropicMessage
     from anthropic.types import RawMessageStreamEvent
-    from anthropic.types.image_block_param import Source
 except ImportError as err:
     raise ImportError(
         "Anthropic client requires the Anthropic Python SDK: pip install anthropic"
@@ -53,7 +52,7 @@ class AnthropicAdapter(BaseAdapter):
             case ContentPart(type=ContentType.image):
                 return dict(
                     type="image",
-                    source=Source(
+                    source=dict(
                         type="base64",
                         data=part.image_data,
                         media_type=part.image_mime_type,
@@ -61,12 +60,12 @@ class AnthropicAdapter(BaseAdapter):
                 )
             case ContentPart(type=ContentType.document):
                 if part.is_document_url:
-                    source = Source(
+                    source = dict(
                         type="url",
                         url=part.document_url,
                     )
                 else:
-                    source = Source(
+                    source = dict(
                         type="base64",
                         data=part.document_data,
                         media_type=part.document_mime_type,
