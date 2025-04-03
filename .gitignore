@@ -3,8 +3,10 @@ __pycache__/
 .vscode/
 htmlcov/
 dist/
+.zed/
 
 .coverage
+coverage.lcov
 *.code-workspace
 .*_cache
 .env
