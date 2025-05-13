@@ -155,26 +155,26 @@ provides scaffolding to integrate other RAG providers.
 Example usage:
 
 ```python
-    from asyncio import run
+from asyncio import run
 
-    from think import LLM
-    from think.rag.base import RAG, RagDocument
+from think import LLM
+from think.rag.base import RAG, RagDocument
 
-    llm = LLM.from_url("openai:///gpt-4o-mini")
-    rag = RAG.for_provider("txtai")(llm)
+llm = LLM.from_url("openai:///gpt-4o-mini")
+rag = RAG.for_provider("txtai")(llm)
 
-    async def index_documents():
-        data = [
-            RagDocument(id="a", text="Titanic: A sweeping romantic epic"),
-            RagDocument(id="b", text="The Godfather: A gripping mafia saga"),
-            RagDocument(id="c", text="Forrest Gump: A heartwarming tale of a simple man"),
-        ]
-        await rag.add_documents(data)
+async def index_documents():
+    data = [
+        RagDocument(id="a", text="Titanic: A sweeping romantic epic"),
+        RagDocument(id="b", text="The Godfather: A gripping mafia saga"),
+        RagDocument(id="c", text="Forrest Gump: A heartwarming tale of a simple man"),
+    ]
+    await rag.add_documents(data)
 
-    run(index_documents())
-    query = "A movie about a ship that sinks"
-    result = run(rag(query))
-    print(result)
+run(index_documents())
+query = "A movie about a ship that sinks"
+result = run(rag(query))
+print(result)
 ```
 
 You can extend the specific RAG provider classes to add custom functionality,
@@ -182,6 +182,39 @@ change LLM prompts, add reranking, etc.
 
 RAG evaluation is supported via the `think.rag.eval.RagEval` class, supporting Context Precision,
 Context Recall, Faithfulness and Answer Relevance metrics.
+
+## Building Agents
+
+Think provides a simple way to build agents that can operate independently,
+use tools, and integrate with RAG.
+
+Example:
+
+```python
+from asyncio import run
+from datetime import datetime
+
+from think import LLM
+from think.agent import BaseAgent, tool
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class Chatbot(BaseAgent):
+    """You are a helpful assistant. Today is {{today}}."""
+
+    @tool
+    def get_time(self) -> str:
+        """Get the current time."""
+        return datetime.now().strftime("%H:%M")
+
+    async def interact(self, response: str) -> str:
+        print(response)
+        return input("> ").strip()
+
+agent = Chatbot(llm, today=datetime.today())
+run(agent.run())
+```
+
 
 ## Quickstart
 
