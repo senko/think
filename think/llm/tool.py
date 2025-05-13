@@ -175,8 +175,10 @@ class ToolKit:
 
         :param functions: A list of functions to add to the toolkit.
         """
-        tool_defs = [ToolDefinition(func) for func in functions]
-        self.tools = {t.name: t for t in tool_defs}
+        self.tools = {}
+        if functions:
+            tool_defs = [ToolDefinition(func) for func in functions]
+            self.tools = {t.name: t for t in tool_defs}
 
     @property
     def tool_names(self) -> list[str]:
@@ -228,6 +230,16 @@ class ToolKit:
             return ToolResponse(
                 call=call, error=f"ERROR: Error running tool {call.name}: {err}"
             )
+
+    def add_tool(self, func: Callable, name: str = None) -> None:
+        """
+        Add a single tool to the toolkit.
+
+        :param func: The function to add as a tool
+        :param name: Optional custom name for the tool
+        """
+        tool_def = ToolDefinition(func, name=name)
+        self.tools[tool_def.name] = tool_def
 
     def generate_tool_spec(
         self,
