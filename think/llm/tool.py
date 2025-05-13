@@ -160,7 +160,7 @@ class ToolKit:
 
     tools: dict[str, ToolDefinition]
 
-    def __init__(self, functions: list[Callable]):
+    def __init__(self, functions: list[Callable] | None = None):
         """
         Initialize the toolkit with a list of functions.
 

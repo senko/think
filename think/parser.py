@@ -1,7 +1,7 @@
 import json
 import re
 from enum import Enum
-from typing import Optional, Union
+from typing import Optional, Union, Type
 
 from pydantic import BaseModel
 
@@ -38,7 +38,7 @@ class MultiCodeBlockParser:
         self.pattern = re.compile(r"```([a-z0-9]+\n)?(.*?)```\s*", re.DOTALL)
 
     def __call__(self, text: str) -> list[str]:
-        blocks = []
+        blocks: list[str] = []
         for block in self.pattern.findall(text):
             blocks.append(block[1].strip())
         return blocks
@@ -83,7 +83,7 @@ class JSONParser:
     Markdown code block.
     """
 
-    def __init__(self, spec: Optional[BaseModel] = None, strict: bool = True):
+    def __init__(self, spec: Optional[Type[BaseModel]] = None, strict: bool = True):
         self.spec = spec
         self.strict = strict or (spec is not None)
 

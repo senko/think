@@ -32,7 +32,7 @@ class FormatTemplate:
     :return: The rendered template string.
     """
 
-    def __call__(self, template: str, **kwargs: dict[str, Any]) -> str:
+    def __call__(self, template: str, **kwargs: Any) -> str:
         return strip_block(template).format(**kwargs)
 
 
@@ -65,7 +65,7 @@ class JinjaStringTemplate(BaseJinjaTemplate):
     def __init__(self):
         super().__init__(None)
 
-    def __call__(self, template: str, **kwargs: dict[str, Any]) -> str:
+    def __call__(self, template: str, **kwargs: Any) -> str:
         tpl = self.env.from_string(strip_block(template))
         return tpl.render(**kwargs)
 
@@ -91,6 +91,6 @@ class JinjaFileTemplate(BaseJinjaTemplate):
             raise ValueError(f"Template directory does not exist: {template_dir}")
         super().__init__(FileSystemLoader(template_dir))
 
-    def __call__(self, template: str, **kwargs: dict[str, Any]) -> str:
+    def __call__(self, template: str, **kwargs: Any) -> str:
         tpl = self.env.get_template(template)
         return tpl.render(**kwargs)
