@@ -71,29 +71,29 @@ class BedrockAdapter(BaseAdapter):
     def dump_content_part(self, part: ContentPart) -> dict:
         match part:
             case ContentPart(type=ContentType.text, text=text):
-                return dict(
-                    text=text,
-                )
+                return {
+                    "text": text,
+                }
             case ContentPart(type=ContentType.image):
-                return dict(
-                    image=dict(
-                        source=dict(
-                            bytes=part.image_bytes,
-                        ),
-                        format=part.image_mime_type.split("/")[1],
-                    )
-                )
+                return {
+                    "image": {
+                        "source": {
+                            "bytes": part.image_bytes,
+                        },
+                        "format": part.image_mime_type.split("/")[1],
+                    }
+                }
             case ContentPart(
                 type=ContentType.tool_call,
                 tool_call=ToolCall(id=id, name=name, arguments=arguments),
             ):
-                return dict(
-                    toolUse=dict(
-                        toolUseId=id,
-                        name=name,
-                        input=arguments,
-                    ),
-                )
+                return {
+                    "toolUse": {
+                        "toolUseId": id,
+                        "name": name,
+                        "input": arguments,
+                    },
+                }
             case ContentPart(
                 type=ContentType.tool_response,
                 tool_response=ToolResponse(
@@ -102,18 +102,18 @@ class BedrockAdapter(BaseAdapter):
                     error=error,
                 ),
             ):
-                return dict(
-                    toolResult=dict(
-                        toolUseId=id,
-                        content=[
-                            dict(
-                                text=response
+                return {
+                    "toolResult": {
+                        "toolUseId": id,
+                        "content": [
+                            {
+                                "text": response
                                 if response is not None
                                 else (error or ""),
-                            )
+                            }
                         ],
-                    ),
-                )
+                    },
+                }
             case _:
                 raise ValueError(f"Unknown content type: {part.type}")
 
@@ -143,10 +143,10 @@ class BedrockAdapter(BaseAdapter):
                 raise ValueError(f"Unknown content type for {part}")
 
     def dump_message(self, message: Message) -> dict:
-        return dict(
-            role=self.dump_role(message.role),
-            content=[self.dump_content_part(part) for part in message.content],
-        )
+        return {
+            "role": self.dump_role(message.role),
+            "content": [self.dump_content_part(part) for part in message.content],
+        }
 
     def parse_message(self, message: dict) -> Message:
         role = Role.assistant if message.get("role") == "assistant" else Role.user
@@ -241,11 +241,11 @@ class BedrockClient(LLM):
 
         async with self.session.client("bedrock-runtime") as client:
             try:
-                kwargs = dict(
-                    modelId=self.model,
-                    messages=messages,
-                    system=system_block,
-                )
+                kwargs = {
+                    "modelId": self.model,
+                    "messages": messages,
+                    "system": system_block,
+                }
                 if cfg:
                     cfg["inferenceConfig"] = cfg
                 if adapter.spec:

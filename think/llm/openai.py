@@ -51,14 +51,14 @@ class OpenAIAdapter(BaseAdapter):
             match part:
                 case ContentPart(type=ContentType.tool_call, tool_call=tool_call):
                     tool_calls.append(
-                        dict(
-                            id=tool_call.id,
-                            type="function",
-                            function=dict(
-                                name=tool_call.name,
-                                arguments=json.dumps(tool_call.arguments),
-                            ),
-                        )
+                        {
+                            "id": tool_call.id,
+                            "type": "function",
+                            "function": {
+                                "name": tool_call.name,
+                                "arguments": json.dumps(tool_call.arguments),
+                            },
+                        }
                     )
                 case ContentPart(
                     type=ContentType.tool_response,
@@ -73,17 +73,17 @@ class OpenAIAdapter(BaseAdapter):
                     )
                 case ContentPart(type=ContentType.text, text=text):
                     text_parts.append(
-                        dict(
-                            type="text",
-                            text=text,
-                        )
+                        {
+                            "type": "text",
+                            "text": text,
+                        }
                     )
                 case ContentPart(type=ContentType.image, image=image):
                     image_parts.append(
-                        dict(
-                            type="image_url",
-                            image_url=dict(url=image),
-                        )
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": image},
+                        }
                     )
 
                 case ContentPart(type=ContentType.document):
@@ -95,20 +95,20 @@ class OpenAIAdapter(BaseAdapter):
                         raise ValueError(f"Unsupported document MIME type: {mime_type}")
 
                     doc_parts.append(
-                        dict(
-                            type="input_file",
-                            file_name="document.pdf",
-                            file_data=part.document_data,
-                        )
+                        {
+                            "type": "input_file",
+                            "file_name": "document.pdf",
+                            "file_data": part.document_data,
+                        }
                     )
 
         if tool_responses:
             return [
-                dict(
-                    role="tool",
-                    tool_call_id=call_id,
-                    content=response,
-                )
+                {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": response,
+                }
                 for call_id, response in tool_responses.items()
             ]
 
@@ -116,27 +116,27 @@ class OpenAIAdapter(BaseAdapter):
             if len(text_parts) == 1:
                 text_parts = text_parts[0]["text"]
             return [
-                dict(
-                    role="assistant",
-                    content=text_parts or None,
-                    tool_calls=tool_calls or None,
-                )
+                {
+                    "role": "assistant",
+                    "content": text_parts or None,
+                    "tool_calls": tool_calls or None,
+                }
             ]
 
         if message.role == Role.system:
             if len(text_parts) == 1:
                 text_parts = text_parts[0]["text"]
-            return [dict(role="system", content=text_parts)]
+            return [{"role": "system", "content": text_parts}]
 
         if message.role == Role.user:
             content = text_parts + image_parts + doc_parts
             if len(content) == 1 and content[0]["type"] == "text":
                 content = content[0]["text"]
             return [
-                dict(
-                    role="user",
-                    content=content,
-                )
+                {
+                    "role": "user",
+                    "content": content,
+                }
             ]
 
         raise ValueError(f"Unsupported message role: {message.role}")
