@@ -1,7 +1,7 @@
 import json
 import re
 from enum import Enum
-from typing import Optional, Union, Type
+from typing import Optional, Union, Type, overload
 
 from pydantic import BaseModel
 
@@ -91,6 +91,15 @@ class JSONParser:
     def schema(self):
         return self.spec.model_json_schema() if self.spec else None
 
+    @overload
+    def __call__(self, text: str) -> BaseModel: ...
+
+    @overload
+    def __call__(self, text: str) -> dict: ...
+
+    @overload
+    def __call__(self, text: str) -> None: ...
+
     def __call__(self, text: str) -> Union[BaseModel, dict, None]:
         text = text.strip()
         if text.startswith("```"):
@@ -132,7 +141,7 @@ class EnumParser:
     any of the Enum values.
     """
 
-    def __init__(self, spec: Enum, ignore_case: bool = True):
+    def __init__(self, spec: Type[Enum], ignore_case: bool = True):
         self.spec = spec
         self.ignore_case = ignore_case
 

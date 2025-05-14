@@ -10,6 +10,15 @@ repos:
       - id: ruff-format
   - repo: local
     hooks:
+      - id: ty
+        name: ty check
+        stages: [pre-commit]
+        types: [python]
+        entry: uv run ty check think/
+        language: python
+        pass_filenames: false
+  - repo: local
+    hooks:
       # Run the tests
       - id: pytest
         name: pytest

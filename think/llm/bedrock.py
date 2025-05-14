@@ -115,7 +115,7 @@ class BedrockAdapter(BaseAdapter):
                     },
                 }
             case _:
-                raise ValueError(f"Unknown content type: {part.type}")
+                raise ValueError(f"Unknown content type: {part}")
 
     def parse_content_part(self, part: dict) -> ContentPart:
         match part:
@@ -158,13 +158,15 @@ class BedrockAdapter(BaseAdapter):
                     ContentPart(type=ContentType.text, text=content),
                 ],
             )
+        elif isinstance(content, list):
+            parts = [self.parse_content_part(part) for part in content]
+            if any(part.type == ContentType.tool_response for part in parts):
+                role = Role.tool
+            return Message(role=role, content=parts)
+        else:
+            raise ValueError(f"Unknown message content: {content}")
 
-        parts = [self.parse_content_part(part) for part in content]
-        if any(part.type == ContentType.tool_response for part in parts):
-            role = Role.tool
-        return Message(role=role, content=parts)
-
-    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
+    def dump_chat(self, chat: Chat) -> tuple[str | None, list[dict]]:
         system_messages = []
         other_messages = []
         offset = 0

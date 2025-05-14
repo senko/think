@@ -47,6 +47,9 @@ jobs:
       - name: Check code style with ruff
         run: uv run ruff format --check --diff
 
+      - name: Check type hints with ty
+        run: uv run ty check think/
+
       - name: Test with pytest
         run: uv run pytest --cov=think --cov-report=lcov
         timeout-minutes: 5

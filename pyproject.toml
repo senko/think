@@ -51,6 +51,8 @@ dev = [
     "chromadb>=0.6.2",
     "pinecone>=5.4.2",
     "pinecone-client>=4.1.2",
+    "aioboto3>=13.2.0",
+    "ty>=0.0.1a1",
 ]
 
 [build-system]
