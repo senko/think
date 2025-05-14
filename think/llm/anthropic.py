@@ -7,6 +7,7 @@ from typing import AsyncGenerator, Literal
 try:
     from anthropic import (
         NOT_GIVEN,
+        NotGiven,
         AsyncAnthropic,
         AsyncStream,
         AuthenticationError,
@@ -130,7 +131,7 @@ class AnthropicAdapter(BaseAdapter):
                     ),
                 )
             case _:
-                raise ValueError(f"Unknown content type: {part.type}")
+                raise ValueError(f"Unknown content type: {part}")
 
     def dump_message(self, message: Message) -> dict:
         if len(message.content) == 1 and message.content[0].type == ContentType.text:
@@ -156,15 +157,17 @@ class AnthropicAdapter(BaseAdapter):
                     ContentPart(type=ContentType.text, text=content),
                 ],
             )
+        elif isinstance(content, list):
+            parts = [self.parse_content_part(part) for part in content]
+            if any(part.type == ContentType.tool_response for part in parts):
+                role = Role.tool
+            return Message(role=role, content=parts)
+        else:
+            raise ValueError(f"Cannot handle message content: {content}")
 
-        parts = [self.parse_content_part(part) for part in content]
-        if any(part.type == ContentType.tool_response for part in parts):
-            role = Role.tool
-        return Message(role=role, content=parts)
-
-    def dump_chat(self, chat: Chat) -> tuple[str, list[dict]]:
+    def dump_chat(self, chat: Chat) -> tuple[str | NotGiven, list[dict]]:
         system_messages = []
-        other_messages = []
+        other_messages: list[dict] = []
         offset = 0
 
         # If the first message is a system one, extract it as a separate

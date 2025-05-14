@@ -39,7 +39,7 @@ class ToolDefinition:
         :param name: The name of the tool, exposed to the LLM. Defaults to the
             function name.
         """
-        self.name = name or func.__name__
+        self.name = name or getattr(func, "__name__", "tool")
         self.func = func
         self.model = self.create_model_from_function(func)
 
@@ -93,8 +93,9 @@ class ToolDefinition:
             else:
                 fields[name] = (annotation, default)
 
+        func_name = getattr(func, "__name__", "tool")
         model_name = (
-            "".join(part.capitalize() for part in func.__name__.split("_")) + "Args"
+            "".join(part.capitalize() for part in func_name.split("_")) + "Args"
         )
 
         model = create_model(
@@ -131,8 +132,8 @@ class ToolResponse:
     """
 
     call: ToolCall
-    response: str = None
-    error: str = None
+    response: str | None = None
+    error: str | None = None
 
 
 class ToolError(Exception):
@@ -231,7 +232,7 @@ class ToolKit:
                 call=call, error=f"ERROR: Error running tool {call.name}: {err}"
             )
 
-    def add_tool(self, func: Callable, name: str = None) -> None:
+    def add_tool(self, func: Callable, name: str | None = None) -> None:
         """
         Add a single tool to the toolkit.
 

@@ -45,7 +45,11 @@ class ContentType(str, Enum):
     tool_response = "tool_response"
 
 
-def _validate_file(value: Any, type_desc: str, magic_bytes: dict[str, bytes]) -> str:
+def _validate_file(
+    value: Any,
+    type_desc: str,
+    magic_bytes: dict[str, bytes],
+) -> str | None:
     """Generic file validator/converter for image/document fields."""
 
     if not value:
@@ -78,7 +82,7 @@ def _validate_file(value: Any, type_desc: str, magic_bytes: dict[str, bytes]) ->
     return f"data:{mime_type};base64,{b64encode(value).decode('ascii')}"
 
 
-def image_url(value: Any) -> str:
+def image_url(value: Any) -> str | None:
     """
     Converts raw image data to a data URL.
 
@@ -88,7 +92,7 @@ def image_url(value: Any) -> str:
     return _validate_file(value, "image", IMAGE_MAGIC_BYTES)
 
 
-def document_url(value: Any) -> str:
+def document_url(value: Any) -> str | None:
     """
     Converts raw document data to a data URL.
 
@@ -275,7 +279,7 @@ class Message(BaseModel):
     """
 
     role: Role
-    content: list[ContentPart] | None = None
+    content: list[ContentPart]
     parsed: Any | None = None
 
     @classmethod
@@ -525,7 +529,7 @@ class Chat:
         :return: Chat instance.
         """
         c = cls()
-        c.messages = [Message(**m) for m in data]
+        c.messages = [Message.model_validate(m) for m in data]
         return c
 
     def clone(self) -> "Chat":

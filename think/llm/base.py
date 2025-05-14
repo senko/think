@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from json import JSONDecodeError
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING, AsyncGenerator, Callable, TypeVar, overload
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, TypeVar, overload, cast
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ValidationError
@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 from think.parser import JSONParser
 
 from .chat import Chat, ContentPart, ContentType, Message, Role
-from .tool import ToolDefinition, ToolKit, ToolResponse
+from .tool import ToolDefinition, ToolKit, ToolCall, ToolResponse
 
 CustomParserResultT = TypeVar("CustomParserResultT")
 PydanticResultT = TypeVar("PydanticResultT", bound=BaseModel)
@@ -473,12 +473,14 @@ class LLM(ABC):
         response_list = []
         for part in message.content:
             if part.type == ContentType.text:
-                text += part.text
+                text += cast(str, part.text)
             elif part.type == ContentType.tool_call:
                 if toolkit is None:
                     log.warning("Tool call with no toolkit defined, ignoring")
                     continue
-                tool_response = await toolkit.execute_tool_call(part.tool_call)
+                tool_response = await toolkit.execute_tool_call(
+                    cast(ToolCall, part.tool_call)
+                )
                 response_list.append(tool_response)
 
         if response_list:
