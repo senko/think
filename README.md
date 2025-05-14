@@ -14,14 +14,17 @@ LLM API provider.
 Ask a question:
 
 ```python
+# example: ask.py
 from asyncio import run
 
 from think import LLM, ask
 
 llm = LLM.from_url("anthropic:///claude-3-haiku-20240307")
 
+
 async def haiku(topic):
     return await ask(llm, "Write a haiku about {{ topic }}", topic=topic)
+
 
 print(run(haiku("computers")))
 ```
@@ -29,24 +32,29 @@ print(run(haiku("computers")))
 Get answers as structured data:
 
 ```python
+# example: structured.py
 from asyncio import run
 
 from think import LLM, LLMQuery
 
 llm = LLM.from_url("openai:///gpt-4o-mini")
 
+
 class CityInfo(LLMQuery):
     """
     Give me basic information about {{ city }}.
     """
+
     name: str
     country: str
     population: int
     latitude: float
     longitude: float
 
+
 async def city_info(city):
     return await CityInfo.run(llm, city=city)
+
 
 info = run(city_info("Paris"))
 print(f"{info.name} is a city in {info.country} with {info.population} inhabitants.")
@@ -55,12 +63,14 @@ print(f"{info.name} is a city in {info.country} with {info.population} inhabitan
 Integrate AI with custom tools:
 
 ```python
+# example: tools.py
 from asyncio import run
 from datetime import date
 
 from think import LLM, Chat
 
 llm = LLM.from_url("openai:///gpt-4o-mini")
+
 
 def current_date() -> str:
     """
@@ -70,9 +80,11 @@ def current_date() -> str:
     """
     return date.today().isoformat()
 
+
 async def days_to_xmas() -> str:
     chat = Chat("How many days are left until Christmas?")
     return await llm(chat, tools=[current_date])
+
 
 print(run(days_to_xmas()))
 ```
@@ -80,16 +92,19 @@ print(run(days_to_xmas()))
 Use vision (with models that support it):
 
 ```python
+# example: vision.py
 from asyncio import run
 
 from think import LLM, Chat
 
 llm = LLM.from_url("openai:///gpt-4o-mini")
 
+
 async def describe_image(path):
     image_data = open(path, "rb").read()
     chat = Chat().user("Describe the image in detail", images=[image_data])
     return await llm(chat)
+
 
 print(run(describe_image("path/to/image.jpg")))
 ```
@@ -97,16 +112,19 @@ print(run(describe_image("path/to/image.jpg")))
 This also works with PDF documents (with models that support PDFs):
 
 ```python
+# example: pdf.py
 from asyncio import run
 
 from think import LLM, Chat
 
 llm = LLM.from_url("google:///gemini-2.0-flash")
 
+
 async def read_pdf(path):
     pdf_data = open(path, "rb").read()
     chat = Chat().user("Read the document", documents=[pdf_data])
     return await llm(chat)
+
 
 print(run(read_pdf("path/to/document.pdf")))
 ```
@@ -114,6 +132,7 @@ print(run(read_pdf("path/to/document.pdf")))
 Use Pydantic or custom parsers for structured data:
 
 ```python
+# example: parsing.py
 from asyncio import run
 from ast import parse
 
@@ -122,6 +141,7 @@ from think.parser import CodeBlockParser
 from think.prompt import JinjaStringTemplate
 
 llm = LLM.from_url("openai:///gpt-4o-mini")
+
 
 def parse_python(text):
     # extract code block from the text
@@ -134,12 +154,14 @@ def parse_python(text):
     except SyntaxError as err:
         raise ValueError(f"Invalid Python code: {err}") from err
 
+
 async def generate_python_script(task):
     system = "You always output the requested code in a single Markdown code block"
     prompt = "Write a Python script for the following task: {{ task }}"
     tpl = JinjaStringTemplate()
     chat = Chat(system).user(tpl(prompt, task=task))
     return await llm(chat, parser=parse_python)
+
 
 print(run(generate_python_script("sort a list of numbers")))
 ```
@@ -155,6 +177,7 @@ provides scaffolding to integrate other RAG providers.
 Example usage:
 
 ```python
+# example: rag.py
 from asyncio import run
 
 from think import LLM
@@ -163,6 +186,7 @@ from think.rag.base import RAG, RagDocument
 llm = LLM.from_url("openai:///gpt-4o-mini")
 rag = RAG.for_provider("txtai")(llm)
 
+
 async def index_documents():
     data = [
         RagDocument(id="a", text="Titanic: A sweeping romantic epic"),
@@ -170,6 +194,7 @@ async def index_documents():
         RagDocument(id="c", text="Forrest Gump: A heartwarming tale of a simple man"),
     ]
     await rag.add_documents(data)
+
 
 run(index_documents())
 query = "A movie about a ship that sinks"
@@ -191,6 +216,7 @@ use tools, and integrate with RAG.
 Example:
 
 ```python
+# example: agent.py
 from asyncio import run
 from datetime import datetime
 
@@ -198,6 +224,7 @@ from think import LLM
 from think.agent import BaseAgent, tool
 
 llm = LLM.from_url("openai:///gpt-4o-mini")
+
 
 class Chatbot(BaseAgent):
     """You are a helpful assistant. Today is {{today}}."""
@@ -210,6 +237,7 @@ class Chatbot(BaseAgent):
     async def interact(self, response: str) -> str:
         print(response)
         return input("> ").strip()
+
 
 agent = Chatbot(llm, today=datetime.today())
 run(agent.run())
