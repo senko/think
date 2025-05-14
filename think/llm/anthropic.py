@@ -45,42 +45,42 @@ class AnthropicAdapter(BaseAdapter):
     def dump_content_part(self, part: ContentPart) -> dict:
         match part:
             case ContentPart(type=ContentType.text, text=text):
-                return dict(
-                    type="text",
-                    text=text,
-                )
+                return {
+                    "type": "text",
+                    "text": text,
+                }
             case ContentPart(type=ContentType.image):
-                return dict(
-                    type="image",
-                    source=dict(
-                        type="base64",
-                        data=part.image_data,
-                        media_type=part.image_mime_type,
-                    ),
-                )
+                return {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "data": part.image_data,
+                        "media_type": part.image_mime_type,
+                    },
+                }
             case ContentPart(type=ContentType.document):
                 if part.is_document_url:
-                    source = dict(
-                        type="url",
-                        url=part.document_url,
-                    )
+                    source = {
+                        "type": "url",
+                        "url": part.document_url,
+                    }
                 else:
-                    source = dict(
-                        type="base64",
-                        data=part.document_data,
-                        media_type=part.document_mime_type,
-                    )
-                return dict(type="document", source=source)
+                    source = {
+                        "type": "base64",
+                        "data": part.document_data,
+                        "media_type": part.document_mime_type,
+                    }
+                return {"type": "document", "source": source}
             case ContentPart(
                 type=ContentType.tool_call,
                 tool_call=ToolCall(id=id, name=name, arguments=arguments),
             ):
-                return dict(
-                    type="tool_use",
-                    id=id,
-                    name=name,
-                    input=arguments,
-                )
+                return {
+                    "type": "tool_use",
+                    "id": id,
+                    "name": name,
+                    "input": arguments,
+                }
             case ContentPart(
                 type=ContentType.tool_response,
                 tool_response=ToolResponse(
@@ -89,11 +89,11 @@ class AnthropicAdapter(BaseAdapter):
                     error=error,
                 ),
             ):
-                return dict(
-                    type="tool_result",
-                    tool_use_id=id,
-                    content=response if response is not None else (error or ""),
-                )
+                return {
+                    "type": "tool_result",
+                    "tool_use_id": id,
+                    "content": response if response is not None else (error or ""),
+                }
             case _:
                 raise ValueError(f"Unknown content type for: {part}")
 
@@ -138,10 +138,10 @@ class AnthropicAdapter(BaseAdapter):
         else:
             content = [self.dump_content_part(part) for part in message.content]
 
-        return dict(
-            role=self.dump_role(message.role),
-            content=content,
-        )
+        return {
+            "role": self.dump_role(message.role),
+            "content": content,
+        }
 
     def parse_message(self, message: dict | AnthropicMessage) -> Message:
         if isinstance(message, AnthropicMessage):
