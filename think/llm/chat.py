@@ -78,6 +78,26 @@ def _validate_file(value: Any, type_desc: str, magic_bytes: dict[str, bytes]) ->
     return f"data:{mime_type};base64,{b64encode(value).decode('ascii')}"
 
 
+def image_url(value: Any) -> str:
+    """
+    Converts raw image data to a data URL.
+
+    :param value: The raw image data or URL to be converted.
+    :return: A data URL representing the image.
+    """
+    return _validate_file(value, "image", IMAGE_MAGIC_BYTES)
+
+
+def document_url(value: Any) -> str:
+    """
+    Converts raw document data to a data URL.
+
+    :param value: The raw document data or URL to be converted.
+    :return: A data URL representing the document.
+    """
+    return _validate_file(value, "document", DOCUMENT_MAGIC_BYTES)
+
+
 def _get_file_b64(data: str) -> str | None:
     """
     Return base64-encoded file data if possible.
@@ -148,7 +168,7 @@ class ContentPart(BaseModel):
     @classmethod
     def validate_image(cls, v):
         """Pydantic validator/converter for the image field."""
-        return _validate_file(v, "image", IMAGE_MAGIC_BYTES)
+        return image_url(v)
 
     @property
     def is_image_url(self) -> bool:
@@ -195,7 +215,7 @@ class ContentPart(BaseModel):
     @classmethod
     def validate_document(cls, v):
         """Pydantic validator/converter for the document field."""
-        return _validate_file(v, "document", DOCUMENT_MAGIC_BYTES)
+        return document_url(v)
 
     @property
     def is_document_url(self) -> bool:

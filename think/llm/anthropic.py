@@ -22,7 +22,7 @@ except ImportError as err:
 
 
 from .base import LLM, BaseAdapter, ConfigError, BadRequestError, PydanticResultT
-from .chat import Chat, ContentPart, ContentType, Message, Role
+from .chat import Chat, ContentPart, ContentType, Message, Role, image_url, document_url
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
 log = getLogger(__name__)
@@ -104,12 +104,12 @@ class AnthropicAdapter(BaseAdapter):
             case {"type": "image", "source": {"data": data}}:
                 return ContentPart(
                     type=ContentType.image,
-                    image=b64decode(data.encode("ascii")),
+                    image=image_url(b64decode(data.encode("ascii"))),
                 )
             case {"type": "document", "source": {"data": data}}:
                 return ContentPart(
                     type=ContentType.document,
-                    document=b64decode(data.encode("ascii")),
+                    document=document_url(b64decode(data.encode("ascii"))),
                 )
             case {"type": "document", "source": {"url": url}}:
                 return ContentPart(
