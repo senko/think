@@ -23,7 +23,7 @@ except ImportError as err:
     ) from err
 
 from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
-from .chat import Chat, ContentPart, ContentType, Message, Role
+from .chat import Chat, ContentPart, ContentType, Message, Role, image_url, document_url
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
 log = getLogger(__name__)
@@ -263,14 +263,14 @@ class OpenAIAdapter(BaseAdapter):
                         content.append(
                             ContentPart(
                                 type=ContentType.image,
-                                image=part.get("image_url", {}).get("url"),
+                                image=image_url(part.get("image_url", {}).get("url")),
                             )
                         )
                     elif part_type == "input_file":
                         content.append(
                             ContentPart(
                                 type=ContentType.document,
-                                document=part.get("file_data"),
+                                document=document_url(part.get("file_data")),
                             )
                         )
                     else:

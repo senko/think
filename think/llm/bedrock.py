@@ -19,7 +19,7 @@ except ImportError as err:
 
 
 from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
-from .chat import Chat, ContentPart, ContentType, Message, Role
+from .chat import Chat, ContentPart, ContentType, Message, Role, image_url
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
 log = getLogger(__name__)
@@ -124,7 +124,7 @@ class BedrockAdapter(BaseAdapter):
             case {"type": "image", "source": {"data": data}}:
                 return ContentPart(
                     type=ContentType.image,
-                    image=b64decode(data.encode("ascii")),
+                    image=image_url(b64decode(data.encode("ascii"))),
                 )
             case {"toolUse": {"toolUseId": id, "name": name, "input": input}}:
                 return ContentPart(
