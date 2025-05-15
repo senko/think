@@ -30,6 +30,12 @@ log = getLogger(__name__)
 
 
 class AnthropicAdapter(BaseAdapter):
+    """
+    Adapter for Anthropic Claude API.
+
+    See `BaseAdapter` for more details.
+    """
+
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "name": tool.name,
@@ -193,6 +199,12 @@ class AnthropicAdapter(BaseAdapter):
 
 
 class AnthropicClient(LLM):
+    """
+    LLM client for Anthropic Claude API.
+
+    See `LLM` for more details.
+    """
+
     provider = "anthropic"
     adapter_class = AnthropicAdapter
 

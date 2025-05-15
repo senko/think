@@ -26,6 +26,14 @@ log = getLogger(__name__)
 
 
 class BedrockAdapter(BaseAdapter):
+    """
+    Adapter for AWS Bedrock API request/response format.
+
+    See `BaseAdapter` for more details on the adapter interface
+    and https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime/client/converse.html#BedrockRuntime.Client.converse
+    for the Bedrock API reference.
+    """
+
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         from copy import deepcopy
 
@@ -196,6 +204,12 @@ class BedrockAdapter(BaseAdapter):
 
 
 class BedrockClient(LLM):
+    """
+    LLM client for AWS Bedrock API.
+
+    See `LLM` for more details.
+    """
+
     provider = "bedrock"
     adapter_class = BedrockAdapter
 

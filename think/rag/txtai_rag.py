@@ -21,6 +21,14 @@ class TxtAiRag(RAG):
         model: str = DEFAULT_EMBEDDINGS_MODEL,
         path: Path | str | None = None,
     ):
+        """
+        Initialize a RAG instance using the TxtAI engine.
+
+        :param llm: The LLM instance to use for generating answers.
+        :param model: The embeddings model to use. Default is `DEFAULT_EMBEDDINGS_MODEL`.
+        :param path: The path to the directory where the embeddings will be stored.
+            If not specified, the embeddings will not be saved to disk.
+        """
         super().__init__(llm)
         self.model = model
         self.path = None if path is None else Path(path)

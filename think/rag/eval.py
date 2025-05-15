@@ -99,10 +99,10 @@ class RagEval:
 
     def __init__(self, rag: RAG, llm: LLM):
         """
-        Initialize the RAG evaluation system.
+        Initialize the RAG evaluation class.
 
-        :param rag: The RAG system to evaluate
-        :param llm: The LLM instance to use for evaluation queries
+        :param rag: The RAG system to evaluate.
+        :param llm: The LLM used for evaluation.
         """
         self.rag = rag
         self.llm = llm
@@ -159,6 +159,10 @@ class RagEval:
         Split the text into individual constituent claims.
 
         The text can be reference text (ground truth) or system output (answer).
+
+        :param text: The text to split into claims.
+        :param is_reference: Whether the text is reference text (ground truth).
+        :return: A list of claims.
         """
         r = await ask(
             self.llm,

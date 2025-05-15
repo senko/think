@@ -21,6 +21,14 @@ log = getLogger(__name__)
 
 
 class GoogleAdapter(BaseAdapter):
+    """
+    Adapter for Google Gemini API request/response format.
+
+    See `BaseAdapter` for more details on the adapter interface
+    and https://ai.google.dev/gemini-api/docs/text-generation#rest
+    for the Gemini API documentation.
+    """
+
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         from copy import deepcopy
 
@@ -174,6 +182,12 @@ class GoogleAdapter(BaseAdapter):
 
 
 class GoogleClient(LLM):
+    """
+    LLM client for Google Gemini API.
+
+    See `LLM` for more details.
+    """
+
     provider = "google"
     adapter_class = GoogleAdapter
 

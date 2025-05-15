@@ -19,6 +19,14 @@ class ChromaRag(RAG):
         collection: str,
         path: Path | str | None = None,
     ):
+        """
+        Initialize a RAG instance using ChromaDB engine.
+
+        :param llm: The LLM instance to use for generating answers.
+        :param collection: The name of the ChromaDB collection to use.
+        :param path: The path to the directory where ChromaDB will store its data.
+            If not specified, ChromaDB will use an in-memory store.
+        """
         super().__init__(llm)
         self.collection_name = collection
         self.path = None if path is None else Path(path)
@@ -34,7 +42,6 @@ class ChromaRag(RAG):
         )
 
     async def add_documents(self, documents: list[RagDocument]):
-        # Extract document data
         ids = [doc["id"] for doc in documents]
         texts = [doc["text"] for doc in documents]
 

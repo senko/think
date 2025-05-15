@@ -25,6 +25,16 @@ class PineconeRag(RAG):
         embedding_model: str = DEFAULT_EMBEDDING_MODEL,
         embed_batch_size: int = DEFAULT_EMBED_BATCH_SIZE,
     ):
+        """
+        Initialize a RAG instance using Pinecone as the vector database.
+
+        :param llm: The LLM instance to use for generating answers.
+        :param index_name: The name of the Pinecone index to use.
+        :param api_key: Pinecone API key. If not provided, it will be read from the
+            PINECONE_API_KEY environment variable.
+        :param embedding_model: The model to use for generating embeddings.
+        :param embed_batch_size: The batch size for embedding generation.
+        """
         super().__init__(llm)
         self.index_name = index_name
         self.embedding_model = embedding_model

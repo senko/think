@@ -28,6 +28,14 @@ log = getLogger(__name__)
 
 
 class GroqAdapter(BaseAdapter):
+    """
+    Adapter for Groq API request/response format.
+
+    See `BaseAdapter` for more details on the adapter interface
+    and https://console.groq.com/docs/api-reference#chat-create-request-body
+    for the Groq API reference.
+    """
+
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "type": "function",

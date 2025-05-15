@@ -18,6 +18,13 @@ log = getLogger(__name__)
 
 
 class OllamaAdapter(BaseAdapter):
+    """
+    Adapter for Ollama API request/response format.
+
+    See `BaseAdapter` for more details on the adapter interface
+    and https://github.com/ollama/ollama/blob/main/docs/api.md for the Ollama API documentation.
+    """
+
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "type": "function",
@@ -141,6 +148,12 @@ class OllamaAdapter(BaseAdapter):
 
 
 class OllamaClient(LLM):
+    """
+    LLM client for Ollama API server.
+
+    See `LLM` for more details.
+    """
+
     provider = "ollama"
     adapter_class = OllamaAdapter
 

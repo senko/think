@@ -30,6 +30,14 @@ log = getLogger(__name__)
 
 
 class OpenAIAdapter(BaseAdapter):
+    """
+    Adapter for OpenAI API request/response format.
+
+    See `BaseAdapte` for more details on the adapter interface
+    and https://platform.openai.com/docs/api-reference/chat/create
+    for the OpenAI API reference.
+    """
+
     def get_tool_spec(self, tool: ToolDefinition) -> dict:
         return {
             "type": "function",
@@ -294,6 +302,12 @@ class OpenAIAdapter(BaseAdapter):
 
 
 class OpenAIClient(LLM):
+    """
+    LLM client for OpenAI API.
+
+    See `LLM` for more details.
+    """
+
     provider = "openai"
     adapter_class = OpenAIAdapter
 

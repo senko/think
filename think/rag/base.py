@@ -1,7 +1,7 @@
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TypedDict, Any
+from typing import Any, TypedDict
 
 from think.ai import ask
 from think.llm.base import LLM
@@ -112,10 +112,10 @@ class RAG(ABC):
         **kwargs: Any,
     ):
         """
-        Initialize the RAG system.
+        Initialize the RAG instance.
 
-        :param llm: The LLM instance to use for query processing and answer generation
-        :param kwargs: Additional keyword arguments for provider-specific configuration
+        :param llm: The LLM instance to use for generating answers.
+        :param kwargs: Additional arguments for the specific RAG implementation.
         """
         self.llm = llm
 
@@ -184,14 +184,14 @@ class RAG(ABC):
 
     async def __call__(self, query: str, limit: int = 10) -> str:
         """
-        Execute the complete RAG pipeline for a query.
+        Invoke the RAG instance with a user query.
 
-        This method orchestrates the full RAG process: query preparation,
-        document retrieval, result reranking, and answer generation.
+        This method processes the query, fetches results from the RAG index,
+        reranks the results, and generates an answer using the LLM.
 
-        :param query: The user's query string
-        :param limit: Maximum number of documents to retrieve (default 10)
-        :return: Generated answer based on retrieved context
+        :param query: User input.
+        :param limit: Maximum number of search results to return (default 10).
+        :return: Answer to the user query.
         """
         prepared_query = await self.prepare_query(query)
         results = await self.fetch_results(query, prepared_query, limit)
