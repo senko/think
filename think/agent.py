@@ -88,7 +88,7 @@ class BaseAgent:
         **kwargs: Any,
     ):
         """
-        Construct a new Agent instance.
+        Initialize a new Agent instance.
 
         :param llm: The LLM instance to use for generating responses.
         :param system: System prompt to use for the agent (if provided, overrides the docstring).
@@ -233,7 +233,7 @@ class BaseAgent:
                 break
 
 
-class RAGMixin:
+class RagMixin:
     """
     Agent mixin for integrating RAG (Retrieval-Augmented Generation) sources.
 
@@ -276,7 +276,7 @@ class RAGMixin:
             self.add_tool(lookup_func.__name__, lookup_func)
 
 
-class SimpleRAGAgent(RAGMixin, BaseAgent):
+class SimpleRagAgent(RagMixin, BaseAgent):
     """
     Simple RAG agent that uses a single RAG source for document retrieval.
 
@@ -293,7 +293,7 @@ class SimpleRAGAgent(RAGMixin, BaseAgent):
 
     def __init__(self, llm: LLM, rag: RAG, **kwargs: Any):
         """
-        Construct a new SimpleRAGAgent instance.
+        Initialize a new SimpleRAGAgent instance.
 
         :param llm: The LLM instance to use for generating responses.
         :param rag: The RAG instance to use for document retrieval.
