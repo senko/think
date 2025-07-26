@@ -33,6 +33,13 @@ class FormatTemplate:
     """
 
     def __call__(self, template: str, **kwargs: Any) -> str:
+        """
+        Render a template using str.format.
+
+        :param template: The template string to render
+        :param kwargs: Keyword arguments to substitute in the template
+        :return: The rendered template string
+        """
         return strip_block(template).format(**kwargs)
 
 
@@ -40,6 +47,11 @@ class BaseJinjaTemplate:
     """Base class for Jinja2 template renderers."""
 
     def __init__(self, loader: Optional[BaseLoader]):
+        """
+        Initialize the Jinja2 template environment.
+
+        :param loader: Optional Jinja2 loader for template loading
+        """
         self.env = Environment(
             loader=loader,
             autoescape=False,
@@ -63,9 +75,19 @@ class JinjaStringTemplate(BaseJinjaTemplate):
     """
 
     def __init__(self):
+        """
+        Initialize the string template renderer with no loader.
+        """
         super().__init__(None)
 
     def __call__(self, template: str, **kwargs: Any) -> str:
+        """
+        Render a Jinja2 template from string.
+
+        :param template: The template string to render
+        :param kwargs: Keyword arguments to pass to the template
+        :return: The rendered template string
+        """
         tpl = self.env.from_string(strip_block(template))
         return tpl.render(**kwargs)
 
@@ -87,10 +109,23 @@ class JinjaFileTemplate(BaseJinjaTemplate):
     """
 
     def __init__(self, template_dir: str):
+        """
+        Initialize the file template renderer with a template directory.
+
+        :param template_dir: Path to the directory containing template files
+        :raises ValueError: If the template directory doesn't exist
+        """
         if not Path(template_dir).is_dir():
             raise ValueError(f"Template directory does not exist: {template_dir}")
         super().__init__(FileSystemLoader(template_dir))
 
     def __call__(self, template: str, **kwargs: Any) -> str:
+        """
+        Render a Jinja2 template from file.
+
+        :param template: The template filename to render
+        :param kwargs: Keyword arguments to pass to the template
+        :return: The rendered template string
+        """
         tpl = self.env.get_template(template)
         return tpl.render(**kwargs)

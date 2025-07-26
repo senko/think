@@ -8,16 +8,50 @@ from think.llm.base import LLM
 
 
 class RagDocument(TypedDict):
+    """
+    Document structure for RAG systems.
+
+    A typed dictionary representing a document in the RAG index,
+    containing a unique identifier and the document text content.
+
+    Attributes:
+        id: Unique identifier for the document
+        text: The textual content of the document
+    """
     id: str
     text: str
 
 
 @dataclass
 class RagResult:
+    """
+    Result from a RAG document retrieval operation.
+
+    Represents a single document retrieved from the RAG system
+    along with its relevance score for the given query.
+
+    Attributes:
+        doc: The retrieved document with id and text
+        score: Relevance score (typically 0.0 to 1.0, higher is more relevant)
+    """
     doc: RagDocument
     score: float
 
 
+# Default Jinja2 template for generating answers from retrieved context.
+#
+# This template is used by RAG systems to generate answers based on retrieved
+# documents. It formats the retrieved documents with their relevance scores
+# and prompts the LLM to answer the query using only the provided context.
+#
+# Template variables:
+#     results: List of RagResult objects containing retrieved documents and scores
+#     query: The original user query to answer
+#
+# The template formats each document with its relevance score and separates
+# them with horizontal rules. It instructs the LLM to base its answer solely
+# on the provided context and to avoid mentioning the contextual nature of
+# the response to maintain natural flow.
 BASE_ANSWER_PROMPT = """Based ONLY on the provided context:
 
 {% for item in results %}
@@ -37,6 +71,34 @@ Answer the question:
 
 
 class RAG(ABC):
+    """
+    Abstract base class for Retrieval-Augmented Generation (RAG) systems.
+
+    This class defines the common interface for RAG implementations that can
+    index documents, perform semantic search, and generate answers based on
+    retrieved context. Different providers can be plugged in by subclassing
+    this class and implementing the abstract methods.
+
+    The RAG pipeline consists of several stages:
+    1. Document indexing via add_documents()
+    2. Query preparation via prepare_query()
+    3. Document retrieval via fetch_results()
+    4. Optional result reranking via rerank()
+    5. Answer generation via get_answer()
+
+    Supported providers include TxtAI, ChromaDB, and Pinecone, each with
+    their own specific implementations and capabilities.
+
+    Class Attributes:
+        PROVIDERS: List of supported RAG provider names
+        QUERY_PROMPT: Optional template for query enhancement
+        ANSWER_PROMPT: Jinja2 template for answer generation
+
+    Example usage:
+        rag = RAG.for_provider("txtai")(llm)
+        await rag.add_documents([{"id": "1", "text": "content"}])
+        answer = await rag("What is the content about?")
+    """
     PROVIDERS = ["txtai", "chroma", "pinecone"]
     QUERY_PROMPT: str | None = None
     ANSWER_PROMPT: str = BASE_ANSWER_PROMPT
@@ -46,6 +108,12 @@ class RAG(ABC):
         llm: LLM,
         **kwargs: Any,
     ):
+        """
+        Initialize the RAG system.
+
+        :param llm: The LLM instance to use for query processing and answer generation
+        :param kwargs: Additional keyword arguments for provider-specific configuration
+        """
         self.llm = llm
 
     @abstractmethod
@@ -112,6 +180,16 @@ class RAG(ABC):
         return results
 
     async def __call__(self, query: str, limit: int = 10) -> str:
+        """
+        Execute the complete RAG pipeline for a query.
+
+        This method orchestrates the full RAG process: query preparation,
+        document retrieval, result reranking, and answer generation.
+
+        :param query: The user's query string
+        :param limit: Maximum number of documents to retrieve (default 10)
+        :return: Generated answer based on retrieved context
+        """
         prepared_query = await self.prepare_query(query)
         results = await self.fetch_results(query, prepared_query, limit)
         reranked_results = await self.rerank(results)

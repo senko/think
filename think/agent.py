@@ -152,7 +152,13 @@ class BaseAgent:
         log.debug(f"{self.__class__.__name__}: Added tool {name}")
 
     def _add_class_tools(self) -> None:
-        # Scan the class for methods marked with @tool decorator and add them to the toolkit.
+        """
+        Scan the class for methods marked with @tool decorator and add them to the toolkit.
+
+        This method introspects the agent instance to find all methods that have been
+        decorated with the @tool decorator and automatically adds them to the agent's
+        toolkit so they can be called by the LLM.
+        """
         for name, method in inspect.getmembers(self, predicate=inspect.ismethod):
             if hasattr(method, "_is_tool") and getattr(method, "_is_tool", False):
                 tool_name = getattr(method, "_tool_name", None) or name

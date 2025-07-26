@@ -35,9 +35,18 @@ class MultiCodeBlockParser:
     """
 
     def __init__(self):
+        """
+        Initialize the parser with regex pattern for code blocks.
+        """
         self.pattern = re.compile(r"```([a-z0-9]+\n)?(.*?)```\s*", re.DOTALL)
 
     def __call__(self, text: str) -> list[str]:
+        """
+        Extract all code blocks from the given text.
+
+        :param text: The text to parse for code blocks
+        :return: List of code block contents (without language specifiers)
+        """
         blocks: list[str] = []
         for block in self.pattern.findall(text):
             blocks.append(block[1].strip())
@@ -84,11 +93,22 @@ class JSONParser:
     """
 
     def __init__(self, spec: Optional[Type[BaseModel]] = None, strict: bool = True):
+        """
+        Initialize the JSON parser.
+
+        :param spec: Optional Pydantic model class for validation
+        :param strict: Whether to raise errors on invalid JSON (default True)
+        """
         self.spec = spec
         self.strict = strict or (spec is not None)
 
     @property
     def schema(self):
+        """
+        Get the JSON schema for the Pydantic model if one is specified.
+
+        :return: JSON schema dict or None if no spec provided
+        """
         return self.spec.model_json_schema() if self.spec else None
 
     @overload
@@ -101,6 +121,13 @@ class JSONParser:
     def __call__(self, text: str) -> None: ...
 
     def __call__(self, text: str) -> Union[BaseModel, dict, None]:
+        """
+        Parse JSON text into a Python structure or Pydantic model.
+
+        :param text: The text to parse (may contain JSON in code blocks)
+        :return: Parsed data as dict, Pydantic model, or None (if not strict)
+        :raises ValueError: If JSON is invalid and strict=True
+        """
         text = text.strip()
         if text.startswith("```"):
             try:
@@ -142,10 +169,23 @@ class EnumParser:
     """
 
     def __init__(self, spec: Type[Enum], ignore_case: bool = True):
+        """
+        Initialize the enum parser.
+
+        :param spec: The Enum class to parse values into
+        :param ignore_case: Whether to ignore case when matching (default True)
+        """
         self.spec = spec
         self.ignore_case = ignore_case
 
     def __call__(self, text: str) -> Enum:
+        """
+        Parse text into an enum value.
+
+        :param text: The text to parse
+        :return: The corresponding enum value
+        :raises ValueError: If text doesn't match any enum value
+        """
         text = text.strip()
         if self.ignore_case:
             text = text.lower()
