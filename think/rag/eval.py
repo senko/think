@@ -4,6 +4,28 @@ from .base import RAG
 
 
 class RagEval:
+    """
+    Evaluation system for RAG (Retrieval-Augmented Generation) systems.
+
+    This class provides comprehensive evaluation metrics for assessing the quality
+    of RAG systems, including context precision, context recall, faithfulness,
+    and answer relevance. It uses an LLM to evaluate various aspects of the
+    retrieval and generation process.
+
+    The evaluation metrics are based on established RAG evaluation frameworks
+    and provide quantitative measures of system performance.
+
+    Key metrics:
+    - Context Precision: How relevant are the retrieved documents?
+    - Context Recall: How well does retrieval cover ground truth?
+    - Faithfulness: Are answers supported by retrieved context?
+    - Answer Relevance: How relevant are answers to queries?
+
+    Example usage:
+        evaluator = RagEval(rag_system, llm)
+        precision = await evaluator.context_precision("query", n_results=10)
+        recall = await evaluator.context_recall("query", reference_text)
+    """
     CONTEXT_PRECISION_PROMPT = """
     You're tasked with evaluating a knowledge retrieval system. For a user query, you're
     given a document retrieved by the system. Based on the document alone, you need to
@@ -75,6 +97,12 @@ class RagEval:
     """
 
     def __init__(self, rag: RAG, llm: LLM):
+        """
+        Initialize the RAG evaluation system.
+
+        :param rag: The RAG system to evaluate
+        :param llm: The LLM instance to use for evaluation queries
+        """
         self.rag = rag
         self.llm = llm
 
