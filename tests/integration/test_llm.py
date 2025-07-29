@@ -188,6 +188,9 @@ async def test_chat_error(url):
         def __init__(self, *args, **kwargs):
             pass
 
+        def get_tool_spec(self, tool):
+            return {"name": tool.name}
+
         def dump_chat(self, chat: Chat):
             return "", {"messages": "invalid"}
 
