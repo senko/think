@@ -313,13 +313,13 @@ class Message(BaseModel):
             content.append(ContentPart(type=ContentType.text, text=text))
         if images:
             for image in images:
-                content.append(ContentPart(type=ContentType.image, image=image))
+                content.append(ContentPart(type=ContentType.image, image=image))  # type: ignore
         if documents:
             for document in documents:
                 content.append(
                     ContentPart(
                         type=ContentType.document,
-                        document=document,
+                        document=document,  # type: ignore
                     )
                 )
         if tool_calls:
