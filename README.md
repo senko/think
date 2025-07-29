@@ -324,7 +324,7 @@ To ensure that your contribution is accepted, please follow these guidelines:
   already an issue for your idea, join the conversation there and explain how you
   plan to implement it
 - make sure that your code is well documented (docstrings, type annotations, comments, etc.) and tested (test coverage should only go up)
-- install and use `pre-commit` hooks (`uv run pre-commit install`) to ensure formatting, linting, type-checking and tests are run before comitting
+- install and use `pre-commit` hooks (`uv run pre-commit install`) to ensure formatting, linting, type-checking and tests are run before committing
 
 ## Copyright
 
