@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from think import LLM
-from think.llm.base import BadRequestError, ConfigError
+from think.llm.base import BadRequestError, ConfigError, BaseAdapter
 from think.llm.chat import Chat
 
 from conftest import api_model_urls, model_urls
@@ -182,7 +182,7 @@ async def test_chat_error(url):
     c = Chat("You're a friendly assistant").user("Tell me a joke")
     llm = LLM.from_url(url)
 
-    class FakeAdapter:
+    class FakeAdapter(BaseAdapter):
         spec = None
 
         def __init__(self, *args, **kwargs):
@@ -191,7 +191,7 @@ async def test_chat_error(url):
         def dump_chat(self, chat: Chat):
             return "", {"messages": "invalid"}
 
-    llm.adapter_class = FakeAdapter
+    llm.adapter_class = FakeAdapter  # type: ignore
 
     with pytest.raises(BadRequestError):
         await llm(c)

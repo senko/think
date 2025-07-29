@@ -15,7 +15,7 @@ async def test_ask_basic():
 
     llm.assert_awaited_once()
 
-    chat: Chat = llm.await_args[0][0]
+    chat: Chat = llm.await_args[0][0]  # type: ignore
     assert chat.messages == [
         Message(
             role=Role.user,
@@ -37,5 +37,5 @@ async def test_llm_query():
     assert isinstance(result, TestQuery)
     assert result.msg == "Hi!"
 
-    chat: Chat = llm.await_args[0][0]
+    chat: Chat = llm.await_args[0][0]  # type: ignore
     assert chat.messages[0].content[0].text.startswith("Prompt with some text\n")

@@ -113,5 +113,5 @@ def test_adapter(chat, ex_system, expected):
     assert system == ex_system
     assert messages == expected
 
-    chat2 = adapter.load_chat(messages, system=system)
+    chat2 = adapter.load_chat(messages, system=None if system is NOT_GIVEN else system)  # type: ignore
     assert chat.messages == chat2.messages
