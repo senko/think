@@ -1,4 +1,5 @@
 import json
+from abc import abstractmethod
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,6 +21,7 @@ class MyAdapter(BaseAdapter):
 class MyClient(LLM):
     adapter_class = MyAdapter
 
+    @abstractmethod
     async def _internal_call(
         self,
         chat: Chat,
@@ -29,6 +31,7 @@ class MyClient(LLM):
         response_format: PydanticResultT | None = None,
     ) -> Message: ...
 
+    @abstractmethod
     async def _internal_stream(
         self,
         chat: Chat,
@@ -78,13 +81,13 @@ async def test_call_minimal():
     assert client.api_key == "fake-key"
     assert client.model == "fake-model"
 
-    client._internal_call = AsyncMock(return_value=response_msg)
+    client._internal_call = AsyncMock(return_value=response_msg)  # type: ignore
     response = await client(chat, temperature=0.5, max_tokens=10)
 
     assert response == "Hi!"
 
-    client._internal_call.assert_called_once()
-    args = client._internal_call.call_args
+    client._internal_call.assert_called_once()  # type: ignore
+    args = client._internal_call.call_args  # type: ignore
 
     assert args.args[0] == chat
     assert args.args[1] == 0.5  # temperature
@@ -100,7 +103,7 @@ async def test_call_with_tools():
     chat = Chat("system message").user("user message")
     client = MyClient(api_key="fake-key", model="fake-model")
 
-    client._internal_call = AsyncMock(
+    client._internal_call = AsyncMock(  # type: ignore
         side_effect=[
             tool_call_message(),
             text_message("Hi!"),
@@ -115,9 +118,9 @@ async def test_call_with_tools():
 
     response = await client(chat, tools=[fake_tool], max_steps=1)
 
-    client._internal_call.assert_called()
-    assert client._internal_call.call_count == 2
-    args = client._internal_call.call_args_list[1]
+    client._internal_call.assert_called()  # type: ignore
+    assert client._internal_call.call_count == 2  # type: ignore
+    args = client._internal_call.call_args_list[1]  # type: ignore
     assert args.args[0] == chat
     assert response == "Hi!"
 
@@ -134,7 +137,7 @@ async def test_call_with_tool_error():
     chat = Chat("system message").user("user message")
     client = MyClient(api_key="fake-key", model="fake-model")
 
-    client._internal_call = AsyncMock(
+    client._internal_call = AsyncMock(  # type: ignore
         side_effect=[
             tool_call_message(),
             text_message("Hi!"),
@@ -147,22 +150,22 @@ async def test_call_with_tool_error():
 
     response = await client(chat, tools=[fake_tool], max_steps=1)
 
-    client._internal_call.assert_called()
-    assert client._internal_call.call_count == 2
-    args = client._internal_call.call_args_list[1]
+    client._internal_call.assert_called()  # type: ignore
+    assert client._internal_call.call_count == 2  # type: ignore
+    args = client._internal_call.call_args_list[1]  # type: ignore
     assert args.args[0] == chat
     assert response == "Hi!"
 
     tc = chat.messages[-2].content[0].tool_response
     assert tc is not None
-    assert "some error" in tc.error
+    assert tc.error and "some error" in tc.error
 
 
 @pytest.mark.asyncio
 async def test_call_with_pydantic():
     chat = Chat("system message").user("user message")
     client = MyClient(api_key="fake-key", model="fake-model")
-    client._internal_call = AsyncMock(
+    client._internal_call = AsyncMock(  # type: ignore
         return_value=text_message(
             json.dumps(
                 {
@@ -181,8 +184,8 @@ async def test_call_with_pydantic():
     assert response.text == "Hi!"
     assert chat.messages[-1].parsed == response
 
-    client._internal_call.assert_called_once()
-    args = client._internal_call.call_args
+    client._internal_call.assert_called_once()  # type: ignore
+    args = client._internal_call.call_args  # type: ignore
 
     assert args.args[0] == chat
     assert args.kwargs["response_format"] is TestModel
@@ -192,7 +195,7 @@ async def test_call_with_pydantic():
 async def test_call_with_custom_parser():
     chat = Chat("system message").user("user message")
     client = MyClient(api_key="fake-key", model="fake-model")
-    client._internal_call = AsyncMock(return_value=text_message("Hi!"))
+    client._internal_call = AsyncMock(return_value=text_message("Hi!"))  # type: ignore
 
     def custom_parser(val: str) -> float:
         assert val == "Hi!"
@@ -219,15 +222,15 @@ async def test_streaming():
         for c in original_message:
             yield c
 
-    client._internal_stream = MagicMock(return_value=do_stream())
+    client._internal_stream = MagicMock(return_value=do_stream())  # type: ignore
     text = []
     async for word in client.stream(chat, temperature=0.5, max_tokens=10):
         text.append(word)
 
     assert "".join(text) == original_message
 
-    client._internal_stream.assert_called_once()
-    args = client._internal_stream.call_args
+    client._internal_stream.assert_called_once()  # type: ignore
+    args = client._internal_stream.call_args  # type: ignore
 
     assert args.args[0] == chat
     assert isinstance(args.args[1], MyAdapter)
