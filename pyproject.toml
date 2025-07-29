@@ -34,27 +34,6 @@ all = [
     "pinecone-client>=4.1.2",
 ]
 
-[dependency-groups]
-dev = [
-    "ruff>=0.9.6",
-    "pytest>=8.3.2",
-    "pytest-coverage>=0.0",
-    "pytest-asyncio>=0.23.8",
-    "pre-commit>=3.8.0",
-    "python-dotenv>=1.0.1",
-    "openai>=1.53.0",
-    "anthropic>=0.37.1",
-    "google-generativeai>=0.8.3",
-    "groq>=0.12.0",
-    "ollama>=0.3.3",
-    "txtai>=8.1.0",
-    "chromadb>=0.6.2",
-    "pinecone>=5.4.2",
-    "pinecone-client>=4.1.2",
-    "aioboto3>=13.2.0",
-    "ty>=0.0.1a1",
-]
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -72,3 +51,24 @@ exclude_lines = ["if TYPE_CHECKING:"]
 
 [tool.pyright]
 typeCheckingMode = "off"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest-asyncio>=1.1.0",
+    "pytest-coverage>=0.0",
+    "pytest>=8.4.1",
+    "ty>=0.0.1a16",
+    "ruff>=0.9.6",
+    "pre-commit>=3.8.0",
+    "python-dotenv>=1.0.1",
+    "openai>=1.53.0",
+    "anthropic>=0.37.1",
+    "google-generativeai>=0.8.3",
+    "groq>=0.12.0",
+    "ollama>=0.3.3",
+    "txtai>=8.1.0",
+    "chromadb>=0.6.2",
+    "pinecone>=5.4.2",
+    "pinecone-client>=4.1.2",
+    "aioboto3>=13.2.0",
+]
