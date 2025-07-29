@@ -319,14 +319,16 @@ Contributions are welcome!
 
 To ensure that your contribution is accepted, please follow these guidelines:
 
+- read [INTERNALS.md](INTERNALS.md) document to get familiar with the codebase
 - open an issue to discuss your idea before you start working on it, or if there's
   already an issue for your idea, join the conversation there and explain how you
   plan to implement it
-- make sure that your code is well documented (docstrings, type annotations, comments,
-  etc.) and tested (test coverage should only go up)
-- make sure that your code is formatted and type-checked with `ruff` (default settings)
+- make sure that your code is well documented (docstrings, type annotations, comments, etc.) and tested (test coverage should only go up)
+- install and use `pre-commit` hooks (`uv run pre-commit install`) to ensure formatting, linting, type-checking and tests are run before comitting
 
 ## Copyright
 
-Copyright (C) 2023-2025. Senko Rasic and Think contributors. You may use and/or distribute
-this project under the terms of MIT license. See the LICENSE file for more details.
+Copyright (C) 2023-2025. Senko Rasic and Think contributors.
+
+You may use and/or distribute this project under the terms of MIT license.
+See the [LICENSE](LICENSE) file for more details.
