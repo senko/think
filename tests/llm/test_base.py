@@ -1,5 +1,4 @@
 import json
-from abc import abstractmethod
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock
 
@@ -21,7 +20,6 @@ class MyAdapter(BaseAdapter):
 class MyClient(LLM):
     adapter_class = MyAdapter
 
-    @abstractmethod
     async def _internal_call(
         self,
         chat: Chat,
@@ -29,16 +27,18 @@ class MyClient(LLM):
         max_tokens: int | None,
         adapter: BaseAdapter,
         response_format: PydanticResultT | None = None,
-    ) -> Message: ...
+    ) -> Message:
+        raise NotImplementedError()
 
-    @abstractmethod
     async def _internal_stream(
         self,
         chat: Chat,
         adapter: BaseAdapter,
         temperature: float | None,
         max_tokens: int | None,
-    ) -> AsyncGenerator[str, None]: ...
+    ) -> AsyncGenerator[str, None]:
+        raise NotImplementedError()
+        yield  # Make it a generator
 
 
 def text_message(text: str) -> Message:

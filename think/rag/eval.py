@@ -26,6 +26,7 @@ class RagEval:
         precision = await evaluator.context_precision("query", n_results=10)
         recall = await evaluator.context_recall("query", reference_text)
     """
+
     CONTEXT_PRECISION_PROMPT = """
     You're tasked with evaluating a knowledge retrieval system. For a user query, you're
     given a document retrieved by the system. Based on the document alone, you need to

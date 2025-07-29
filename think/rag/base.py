@@ -18,6 +18,7 @@ class RagDocument(TypedDict):
         id: Unique identifier for the document
         text: The textual content of the document
     """
+
     id: str
     text: str
 
@@ -34,6 +35,7 @@ class RagResult:
         doc: The retrieved document with id and text
         score: Relevance score (typically 0.0 to 1.0, higher is more relevant)
     """
+
     doc: RagDocument
     score: float
 
@@ -99,6 +101,7 @@ class RAG(ABC):
         await rag.add_documents([{"id": "1", "text": "content"}])
         answer = await rag("What is the content about?")
     """
+
     PROVIDERS = ["txtai", "chroma", "pinecone"]
     QUERY_PROMPT: str | None = None
     ANSWER_PROMPT: str = BASE_ANSWER_PROMPT
