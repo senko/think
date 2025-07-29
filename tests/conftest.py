@@ -15,7 +15,7 @@ def model_urls(vision: bool = False) -> list[str]:
     if getenv("GEMINI_API_KEY"):
         retval.append("google:///gemini-2.0-flash-lite-preview-02-05")
     if getenv("GROQ_API_KEY"):
-        retval.append("groq:///llama-3.2-90b-vision-preview")
+        retval.append("groq:///?model=meta-llama/llama-4-scout-17b-16e-instruct")
     if getenv("OLLAMA_MODEL"):
         if vision:
             retval.append(f"ollama:///{getenv('OLLAMA_VISION_MODEL')}")
