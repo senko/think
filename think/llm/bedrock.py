@@ -80,7 +80,9 @@ class BedrockAdapter(BaseAdapter):
                         "source": {
                             "bytes": part.image_bytes,
                         },
-                        "format": part.image_mime_type.split("/")[1] if part.image_mime_type else "unknown",
+                        "format": part.image_mime_type.split("/")[1]
+                        if part.image_mime_type
+                        else "unknown",
                     }
                 }
             case ContentPart(
