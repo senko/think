@@ -1,6 +1,9 @@
 # Think Library Internals
 
-This document provides a comprehensive overview of the Think library's internal architecture, components, and implementation details. It serves as a guide for contributors and maintainers to understand the codebase structure and design patterns.
+This document provides a comprehensive overview of the Think library's internal
+architecture, components, and implementation details. It serves as a guide for
+contributors and maintainers to understand the codebase structure and design
+patterns.
 
 ## Table of Contents
 
@@ -91,7 +94,7 @@ The LLM system is built around an abstract base class that defines a common inte
 
 **Supported Providers:**
 - OpenAI (`think/llm/openai.py`)
-- Anthropic (`think/llm/anthropic.py`) 
+- Anthropic (`think/llm/anthropic.py`)
 - Google Gemini (`think/llm/google.py`)
 - Groq (`think/llm/groq.py`)
 - Ollama (`think/llm/ollama.py`)
@@ -291,7 +294,7 @@ Utilities for parsing LLM outputs into structured formats.
 - Ignores language specifier
 - Raises error if not exactly one block found
 
-#### `MultiCodeBlockParser` Class  
+#### `MultiCodeBlockParser` Class
 - Extracts multiple code blocks from markdown
 - Returns list of code strings
 - Base class for `CodeBlockParser`
@@ -491,4 +494,6 @@ All public methods and classes now include:
 - Ensure consistency in documentation style across modules
 - Validate that examples in docstrings remain functional
 
-This internal documentation should be updated as new features are added and the architecture evolves. Contributors should refer to this document when making changes to understand the impact on other components.
+This internal documentation should be updated as new features are added and the
+architecture evolves. Contributors should refer to this document when making
+changes to understand the impact on other components.
