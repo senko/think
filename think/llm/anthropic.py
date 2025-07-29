@@ -63,7 +63,7 @@ class AnthropicAdapter(BaseAdapter):
                 if part.is_document_url:
                     source = {
                         "type": "url",
-                        "url": part.document_url,
+                        "url": part.document,
                     }
                 else:
                     source = {
