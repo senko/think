@@ -1,6 +1,6 @@
 [project]
 name = "think-llm"
-version = "0.0.9"
+version = "0.0.10"
 description = "Create programs that think, using LLMs."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ authors = [{ name = "Senko Rasic", email = "senko@senko.net" }]
 license = { text = "MIT" }
 homepage = "https://github.com/senko/think"
 repository = "https://github.com/senko/think"
-keywords = ["ai", "llm", "rag"]
+keywords = ["ai", "llm", "rag", "agents"]
 
 [project.optional-dependencies]
 openai = ["openai>=1.53.0"]
