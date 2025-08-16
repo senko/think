@@ -23,6 +23,9 @@ def model_urls(vision: bool = False) -> list[str]:
             retval.append(f"ollama:///{getenv('OLLAMA_MODEL')}")
     if getenv("AWS_SECRET_ACCESS_KEY"):
         retval.append("bedrock:///amazon.nova-lite-v1:0?region=us-east-1")
+    # LiteLLM can use any of the above API keys, but we'll test it specifically with OpenAI
+    if getenv("OPENAI_API_KEY"):
+        retval.append("litellm:///gpt-4o-mini")
     if retval == []:
         raise RuntimeError("No LLM API keys found in environment")
     return retval
