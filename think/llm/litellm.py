@@ -161,7 +161,7 @@ class LiteLLMAdapter(BaseAdapter):
         """Parse OpenAI tool call message to think Message."""
         tool_call_id = message.get("tool_call_id")
         if tool_call_id is None:
-            raise ValueError("Missing tool_call_id in tool message: %r", message)
+            raise ValueError(f"Missing tool_call_id in tool message: {message!r}")
 
         text = self.text_content(message.get("content"))
 
@@ -191,17 +191,17 @@ class LiteLLMAdapter(BaseAdapter):
                 call_id = tc.get("id")
                 if call_id is None:
                     raise ValueError(
-                        "Missing tool call ID in assistant message: %r", tc
+                        f"Missing tool call ID in assistant message: {tc!r}"
                     )
                 name = tc.get("function", {}).get("name")
                 if name is None:
                     raise ValueError(
-                        "Missing function name in assistant message: %r", tc
+                        f"Missing function name in assistant message: {tc!r}"
                     )
                 arguments = tc.get("function", {}).get("arguments")
                 if arguments is None:
                     raise ValueError(
-                        "Missing function arguments in assistant message: %r", tc
+                        f"Missing function arguments in assistant message: {tc!r}"
                     )
 
                 tool_calls.append(
@@ -221,7 +221,7 @@ class LiteLLMAdapter(BaseAdapter):
             parts.append(
                 ContentPart(
                     type=ContentType.text,
-                    text=text or "",
+                    text=text,
                 )
             )
 
@@ -246,7 +246,7 @@ class LiteLLMAdapter(BaseAdapter):
         elif role == "user":
             raw_content = message.get("content")
             if raw_content is None:
-                raise ValueError("Missing content in user message: %r", message)
+                raise ValueError(f"Missing content in user message: {message!r}")
 
             content: list[ContentPart] = []
             if isinstance(raw_content, str):
