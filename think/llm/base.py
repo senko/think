@@ -127,7 +127,7 @@ class LLM(ABC):
     >>> client(...)
     """
 
-    PROVIDERS = ["anthropic", "google", "groq", "ollama", "openai"]
+    PROVIDERS = ["anthropic", "google", "groq", "litellm", "ollama", "openai"]
 
     provider: str
     adapter_class: type[BaseAdapter]
@@ -203,6 +203,10 @@ class LLM(ABC):
             from .bedrock import BedrockClient
 
             return BedrockClient
+        elif provider == "litellm":
+            from .litellm import LiteLLMClient
+
+            return LiteLLMClient
         else:
             raise ValueError(f"Unknown provider: {provider}")
 

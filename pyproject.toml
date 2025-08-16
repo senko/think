@@ -4,7 +4,12 @@ version = "0.0.9"
 description = "Create programs that think, using LLMs."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = ["pydantic>=2.9.2", "jinja2>=3.1.2", "httpx>=0.27.2"]
+dependencies = [
+    "pydantic>=2.9.2",
+    "jinja2>=3.1.2",
+    "httpx>=0.27.2",
+    "litellm>=1.75.7",
+]
 authors = [{ name = "Senko Rasic", email = "senko@senko.net" }]
 license = { text = "MIT" }
 homepage = "https://github.com/senko/think"
