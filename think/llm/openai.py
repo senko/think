@@ -336,7 +336,7 @@ class OpenAIClient(LLM):
                 response = await self.client.beta.chat.completions.parse(
                     model=self.model,
                     messages=messages,
-                    temperature=temperature,
+                    temperature=NOT_GIVEN if temperature is None else temperature,
                     tools=adapter.spec or NOT_GIVEN,
                     response_format=response_format,
                     max_completion_tokens=max_tokens or NOT_GIVEN,
@@ -345,7 +345,7 @@ class OpenAIClient(LLM):
                 response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=temperature,
+                    temperature=NOT_GIVEN if temperature is None else temperature,
                     tools=adapter.spec or NOT_GIVEN,
                     max_completion_tokens=max_tokens or NOT_GIVEN,
                 )
