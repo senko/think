@@ -120,7 +120,7 @@ See also:
 import json
 import re
 from enum import Enum
-from typing import Optional, Union, Type, overload
+from typing import Optional, Type, Union, overload
 
 from pydantic import BaseModel
 

@@ -152,6 +152,6 @@ See also:
 
 # Import all providers to make them available
 from .base import LLM
-from .chat import Chat, Message, Role, ContentPart, ContentType
+from .chat import Chat, ContentPart, ContentType, Message, Role
 
 __all__ = ["LLM", "Chat", "Message", "Role", "ContentPart", "ContentType"]

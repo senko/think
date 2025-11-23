@@ -79,7 +79,7 @@ from abc import ABC, abstractmethod
 from json import JSONDecodeError
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING, AsyncGenerator, Callable, TypeVar, overload, cast
+from typing import TYPE_CHECKING, AsyncGenerator, Callable, TypeVar, cast, overload
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ValidationError
@@ -87,7 +87,7 @@ from pydantic import BaseModel, ValidationError
 from think.parser import JSONParser
 
 from .chat import Chat, ContentPart, ContentType, Message, Role
-from .tool import ToolDefinition, ToolKit, ToolCall, ToolResponse
+from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 CustomParserResultT = TypeVar("CustomParserResultT")
 PydanticResultT = TypeVar("PydanticResultT", bound=BaseModel)

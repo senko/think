@@ -123,17 +123,16 @@ See also:
 - [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation) for more about RAG
 """
 
-from pathlib import Path
-from typing import Callable, Any, Optional, TypeVar
-from logging import getLogger
 import inspect
+from logging import getLogger
+from pathlib import Path
+from typing import Any, Callable, Optional, TypeVar
 
 from think.llm.base import LLM, CustomParserResultT, PydanticResultT
 from think.llm.chat import Chat
-from think.llm.tool import ToolKit, ToolDefinition
-from think.prompt import JinjaStringTemplate, JinjaFileTemplate
+from think.llm.tool import ToolDefinition, ToolKit
+from think.prompt import JinjaFileTemplate, JinjaStringTemplate
 from think.rag.base import RAG
-
 
 F = TypeVar("F", bound=Callable[..., Any])
 
