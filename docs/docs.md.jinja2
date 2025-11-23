@@ -1,0 +1,52 @@
+# Think Documentation
+
+{{ intro }}
+
+## Table of Contents
+
+- [Quickstart](#quickstart)
+{% for section in guide_sections %}
+- [{{ section.title }}](#{{ section.title | lower | replace(" ", "-") | replace("/", "") }})
+{% endfor %}
+- [API Reference](#api-reference)
+
+## Quickstart
+
+{{ quickstart }}
+
+## Guide
+
+{% for section in guide_sections %}
+### {{ section.title }}
+
+{{ section.content }}
+
+{% endfor %}
+
+## API Reference
+
+{% for module in api_modules %}
+### {{ module.name }}
+
+{{ module.description }}
+
+{% for class in module.classes %}
+#### {{ class.name }}
+
+{{ class.description }}
+
+{% for method in class.methods %}
+##### `{{ method.signature }}`
+
+{{ method.description }}
+
+{% endfor %}
+{% endfor %}
+
+{% for function in module.functions %}
+#### `{{ function.signature }}`
+
+{{ function.description }}
+
+{% endfor %}
+{% endfor %}
