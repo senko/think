@@ -13,7 +13,7 @@ import asyncio
 from think import LLM
 from think.rag.base import RAG, RagDocument
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 rag = RAG.for_provider("txtai")(llm)
 
 async def index_and_query():
@@ -51,7 +51,7 @@ from think import LLM
 from think.rag.base import RAG, RagDocument
 from think.rag.txtai_rag import TxtAIRag
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 class CustomRag(TxtAIRag):
     '''Custom RAG implementation with specialized prompting.'''

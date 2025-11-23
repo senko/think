@@ -9,7 +9,7 @@ def model_urls(vision: bool = False) -> list[str]:
     """
     retval = []
     if getenv("OPENAI_API_KEY"):
-        retval.append("openai:///gpt-4o-mini")
+        retval.append("openai:///gpt-5-nano")
     if getenv("ANTHROPIC_API_KEY"):
         retval.append("anthropic:///claude-3-haiku-20240307")
     if getenv("GEMINI_API_KEY"):

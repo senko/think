@@ -13,7 +13,7 @@ import asyncio
 from think import LLM
 from think.llm.chat import Chat
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 def get_weather(location: str) -> str:
     '''
@@ -47,7 +47,7 @@ from datetime import datetime
 from think import LLM
 from think.llm.chat import Chat
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 def get_time() -> str:
     '''Get the current time.'''
@@ -84,7 +84,7 @@ from think import LLM
 from think.llm.chat import Chat
 from think.llm.tool import ToolKit
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 # Create a toolkit for math operations
 math_tools = ToolKit("math")

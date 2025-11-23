@@ -12,7 +12,7 @@ import asyncio
 from think import LLM
 from think.agent import BaseAgent, tool
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 class WeatherAgent(BaseAgent):
     '''You are a helpful weather assistant.'''
@@ -47,7 +47,7 @@ from think import LLM
 from think.agent import BaseAgent, tool
 from think.rag.base import RAG, RagDocument
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 class KnowledgeAgent(BaseAgent):
     '''You are a helpful assistant with access to a knowledge base.'''
@@ -90,7 +90,7 @@ from datetime import datetime
 from think import LLM
 from think.agent import BaseAgent, tool
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 class ChatbotAgent(BaseAgent):
     '''You are a friendly and helpful assistant.'''

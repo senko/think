@@ -15,7 +15,7 @@ from think.llm.chat import Chat
 from think.parser import JSONParser
 import asyncio
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 parser = JSONParser()
 
 async def get_structured_data():
@@ -39,7 +39,7 @@ from think.llm.chat import Chat
 from think.parser import CodeBlockParser
 import asyncio
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 parser = CodeBlockParser()
 
 async def get_python_code():
@@ -64,7 +64,7 @@ from think.llm.chat import Chat
 from think.parser import MultiCodeBlockParser
 import asyncio
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 parser = MultiCodeBlockParser()
 
 async def get_multiple_languages():
@@ -97,7 +97,7 @@ class Movie(BaseModel):
     year: int
     rating: float
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 async def get_movie_data():
     chat = Chat('''Return information about the movie "The Matrix" in JSON format

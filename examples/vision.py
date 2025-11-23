@@ -3,7 +3,7 @@ from asyncio import run
 
 from think import LLM, Chat
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 async def describe_image(path):

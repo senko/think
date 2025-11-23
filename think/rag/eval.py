@@ -14,7 +14,7 @@ from think.rag.base import RAG, RagDocument
 from think.rag.eval import RagEval
 
 # Set up the LLM and RAG system
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 rag = RAG.for_provider("txtai")(llm)
 
 # Set up the evaluator
@@ -62,7 +62,7 @@ from think import LLM
 from think.rag.base import RAG, RagDocument
 from think.rag.eval import RagEval
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 rag = RAG.for_provider("txtai")(llm)
 evaluator = RagEval(llm)
 

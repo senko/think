@@ -12,7 +12,7 @@ their responses.
 from think import LLM
 
 # Initialize an LLM using a URL-based configuration
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 # Create a simple chat
 from think.llm.chat import Chat
@@ -38,7 +38,7 @@ provider://[api_key@][host[:port]]/model[?query]
 - `model` is the name of the model to use
 
 Examples:
-- `openai:///gpt-4o-mini` (API key from OPENAI_API_KEY environment variable)
+- `openai:///gpt-5-nano` (API key from OPENAI_API_KEY environment variable)
 - `anthropic://sk-my-key@/claude-3-opus-20240229` (explicit API key)
 - `openai://localhost:8080/wizard-mega` (custom server over HTTP)
 

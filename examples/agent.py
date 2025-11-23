@@ -5,7 +5,7 @@ from datetime import datetime
 from think import LLM
 from think.agent import BaseAgent, tool
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 class Chatbot(BaseAgent):

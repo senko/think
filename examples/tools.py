@@ -4,7 +4,7 @@ from datetime import date
 
 from think import LLM, Chat
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 def current_date() -> str:

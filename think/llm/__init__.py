@@ -14,7 +14,7 @@ from think import LLM
 import asyncio
 
 # Using API key from environment variable OPENAI_API_KEY
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 # With explicit API key
 llm = LLM.from_url("openai://sk-your-api-key@/gpt-4o-mini")

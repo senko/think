@@ -35,7 +35,7 @@ The `LLMQuery` class makes it easy to get structured data from LLMs using Pydant
 import asyncio
 from think import LLM, LLMQuery
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 class WeatherForecast(LLMQuery):
     '''

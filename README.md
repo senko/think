@@ -37,7 +37,7 @@ from asyncio import run
 
 from think import LLM, LLMQuery
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 class CityInfo(LLMQuery):
@@ -69,7 +69,7 @@ from datetime import date
 
 from think import LLM, Chat
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 def current_date() -> str:
@@ -97,7 +97,7 @@ from asyncio import run
 
 from think import LLM, Chat
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 async def describe_image(path):
@@ -140,7 +140,7 @@ from think import LLM, Chat
 from think.parser import CodeBlockParser
 from think.prompt import JinjaStringTemplate
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 def parse_python(text):
@@ -183,7 +183,7 @@ from asyncio import run
 from think import LLM
 from think.rag.base import RAG, RagDocument
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 rag = RAG.for_provider("txtai")(llm)
 
 
@@ -223,7 +223,7 @@ from datetime import datetime
 from think import LLM
 from think.agent import BaseAgent, tool
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 class Chatbot(BaseAgent):
@@ -291,8 +291,8 @@ provider://[api_key@][host[:port]]/model[?query]
 - `model-name` is the name of the model to use
 
 Examples:
-    - `openai:///gpt-3.5-turbo` (API key in environment)
-    - `openai://sk-my-openai-key@/gpt-3-5-turbo` (explicit API key)
+    - `openai:///gpt-5-nano` (API key in environment)
+    - `openai://sk-my-openai-key@/gpt-5-nano` (explicit API key)
     - `openai://localhost:1234/v1?model=llama-3.2-8b` (custom server over HTTP)
     - `openai+https://openrouter.ai/api/v1?model=llama-3.2-8b` (custom server, HTTPS)
 

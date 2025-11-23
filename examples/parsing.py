@@ -1,12 +1,12 @@
 # example: parsing.py
-from asyncio import run
 from ast import parse
+from asyncio import run
 
 from think import LLM, Chat
 from think.parser import CodeBlockParser
 from think.prompt import JinjaStringTemplate
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 
 def parse_python(text):

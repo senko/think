@@ -13,7 +13,7 @@ from think import LLM
 from think.llm.chat import Chat
 import asyncio
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 async def simple_chat():
     # Create a chat with a system prompt and user message
@@ -42,7 +42,7 @@ from think import LLM
 from think.llm.chat import Chat
 import asyncio
 
-llm = LLM.from_url("openai:///gpt-4o-mini")
+llm = LLM.from_url("openai:///gpt-5-nano")
 
 async def role_based_chat():
     chat = Chat()
@@ -68,7 +68,7 @@ from think import LLM
 from think.llm.chat import Chat
 import asyncio
 
-llm = LLM.from_url("openai:///gpt-4o-mini")  # Use a vision-capable model
+llm = LLM.from_url("openai:///gpt-5-nano")  # Use a vision-capable model
 
 async def analyze_image():
     # Load image data
