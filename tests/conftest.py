@@ -11,11 +11,11 @@ def model_urls(vision: bool = False) -> list[str]:
     if getenv("OPENAI_API_KEY"):
         retval.append("openai:///gpt-5-nano")
     if getenv("ANTHROPIC_API_KEY"):
-        retval.append("anthropic:///claude-3-haiku-20240307")
+        retval.append("anthropic:///claude-haiku-4-5")
     if getenv("GEMINI_API_KEY"):
-        retval.append("google:///gemini-2.0-flash-lite-preview-02-05")
-    if getenv("GROQ_API_KEY"):
-        retval.append("groq:///?model=meta-llama/llama-4-scout-17b-16e-instruct")
+        retval.append("google:///gemini-2.5-flash-lite")
+    if getenv("GROQ_API_KEY") and not vision:
+        retval.append("groq:///?model=openai/gpt-oss-20b")
     if getenv("OLLAMA_MODEL"):
         if vision:
             retval.append(f"ollama:///{getenv('OLLAMA_VISION_MODEL')}")

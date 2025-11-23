@@ -96,7 +96,7 @@ from think import LLM
 import asyncio
 
 # Using API key from environment variable GROQ_API_KEY
-llm = LLM.from_url("groq:///llama-3-8b-8192")
+llm = LLM.from_url("groq:///?model=openai/gpt-oss-20b")
 
 async def main():
     response = await llm("What is artificial intelligence?")
