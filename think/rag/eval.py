@@ -1,3 +1,113 @@
+"""
+# RAG Evaluation
+
+The `rag.eval` module provides tools for evaluating the performance of RAG systems.
+It includes metrics for measuring different aspects of RAG quality and functionality.
+
+## Basic Evaluation
+
+```python
+# example: rag_eval_basic.py
+import asyncio
+from think import LLM
+from think.rag.base import RAG, RagDocument
+from think.rag.eval import RagEval
+
+# Set up the LLM and RAG system
+llm = LLM.from_url("openai:///gpt-4o-mini")
+rag = RAG.for_provider("txtai")(llm)
+
+# Set up the evaluator
+evaluator = RagEval(llm)
+
+async def evaluate_rag():
+    # Add test documents
+    documents = [
+        RagDocument(id="doc1", text="The Eiffel Tower is 330 meters tall and located in Paris, France."),
+        RagDocument(id="doc2", text="The Great Wall of China is over 21,000 kilometers long."),
+        RagDocument(id="doc3", text="The Grand Canyon is 446 km long and up to 29 km wide.")
+    ]
+    await rag.add_documents(documents)
+
+    # Generate answer
+    query = "How tall is the Eiffel Tower?"
+    answer = await rag(query)
+
+    # Evaluate answer
+    precision = await evaluator.context_precision(query, rag.last_context, answer)
+    relevance = await evaluator.answer_relevance(query, answer)
+
+    print(f"Answer: {answer}")
+    print(f"Context Precision: {precision}")
+    print(f"Answer Relevance: {relevance}")
+
+asyncio.run(evaluate_rag())
+```
+
+## Available Metrics
+
+The RagEval class provides several metrics:
+
+1. **Context Precision**: Measures if retrieved documents are relevant to the query
+2. **Context Recall**: Measures if all relevant information is retrieved
+3. **Faithfulness**: Evaluates if the answer is supported by the retrieved context
+4. **Answer Relevance**: Assesses if the answer addresses the query
+
+## Comprehensive Evaluation
+
+```python
+# example: rag_eval_comprehensive.py
+import asyncio
+from think import LLM
+from think.rag.base import RAG, RagDocument
+from think.rag.eval import RagEval
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+rag = RAG.for_provider("txtai")(llm)
+evaluator = RagEval(llm)
+
+async def comprehensive_eval():
+    # Add documents (assume already done)
+
+    # Define test cases
+    test_cases = [
+        {"query": "What are the dimensions of the Grand Canyon?", "ground_truth": "The Grand Canyon is 446 km long and up to 29 km wide."},
+        {"query": "How tall is the Eiffel Tower?", "ground_truth": "The Eiffel Tower is 330 meters tall."}
+    ]
+
+    results = {}
+    for tc in test_cases:
+        query = tc["query"]
+        ground_truth = tc["ground_truth"]
+
+        # Get RAG answer
+        answer = await rag(query)
+
+        # Evaluate all metrics
+        metrics = {
+            "precision": await evaluator.context_precision(query, rag.last_context, answer),
+            "recall": await evaluator.context_recall(query, rag.last_context, ground_truth),
+            "faithfulness": await evaluator.faithfulness(rag.last_context, answer),
+            "relevance": await evaluator.answer_relevance(query, answer)
+        }
+
+        results[query] = {"answer": answer, "metrics": metrics}
+
+    # Print results
+    for query, result in results.items():
+        print(f"Query: {query}")
+        print(f"Answer: {result['answer']}")
+        print(f"Metrics: {result['metrics']}")
+        print()
+
+asyncio.run(comprehensive_eval())
+```
+
+See also:
+- [RAG Base Functionality](#rag-base-functionality) for RAG implementation details
+- [Basic LLM Use](#basic-llm-use) for general LLM interaction
+"""
+
 from ..ai import ask
 from ..llm.base import LLM
 from .base import RAG

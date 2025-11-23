@@ -1,3 +1,122 @@
+"""
+# Parsing Functionality
+
+The `parser` module provides tools for parsing structured data from LLM responses,
+making it easier to extract and validate information from raw text outputs.
+
+## JSON Parsing
+
+The `JSONParser` is useful for extracting and validating JSON from LLM responses:
+
+```python
+# example: json_parser.py
+from think import LLM
+from think.llm.chat import Chat
+from think.parser import JSONParser
+import asyncio
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+parser = JSONParser()
+
+async def get_structured_data():
+    chat = Chat("List the top 3 programming languages as a JSON array")
+    response = await llm(chat, parser=parser)
+    print(type(response))  # <class 'list'>
+    for lang in response:
+        print(lang)
+
+asyncio.run(get_structured_data())
+```
+
+## Code Block Parsing
+
+For extracting code blocks from LLM responses:
+
+```python
+# example: code_block_parser.py
+from think import LLM
+from think.llm.chat import Chat
+from think.parser import CodeBlockParser
+import asyncio
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+parser = CodeBlockParser()
+
+async def get_python_code():
+    chat = Chat("Write a Python function to calculate the factorial of a number")
+    code = await llm(chat, parser=parser)
+    print(code)
+    # Execute the code to verify it works
+    exec(code)
+    print(f"Factorial of 5: {factorial(5)}")  # Uses the function from the code
+
+asyncio.run(get_python_code())
+```
+
+## Multiple Code Blocks
+
+For working with multiple code blocks:
+
+```python
+# example: multi_code_blocks.py
+from think import LLM
+from think.llm.chat import Chat
+from think.parser import MultiCodeBlockParser
+import asyncio
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+parser = MultiCodeBlockParser()
+
+async def get_multiple_languages():
+    chat = Chat("Write a 'Hello World' program in Python, JavaScript, and Go")
+    code_blocks = await llm(chat, parser=parser)
+
+    for i, block in enumerate(code_blocks):
+        print(f"Code block {i+1}:")
+        print(block)
+        print()
+
+asyncio.run(get_multiple_languages())
+```
+
+## Pydantic Integration
+
+For validating responses against Pydantic models:
+
+```python
+# example: pydantic_parser.py
+from pydantic import BaseModel
+from typing import List
+from think import LLM
+from think.llm.chat import Chat
+import asyncio
+
+class Movie(BaseModel):
+    title: str
+    director: str
+    year: int
+    rating: float
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+async def get_movie_data():
+    chat = Chat('''Return information about the movie "The Matrix" in JSON format
+    with fields: title, director, year, and rating.''')
+
+    response = await llm(chat, parser=Movie)
+    print(f"Title: {response.title}")
+    print(f"Director: {response.director}")
+    print(f"Year: {response.year}")
+    print(f"Rating: {response.rating}")
+
+asyncio.run(get_movie_data())
+```
+
+See also:
+- [Structured Outputs and Parsing](#structured-outputs-and-parsing) for more examples
+- [Basic LLM Use](#basic-llm-use) for integrating parsers with LLM calls
+"""
+
 import json
 import re
 from enum import Enum

@@ -1,3 +1,92 @@
+"""
+# Prompt Templates
+
+The `prompt` module provides functionality for creating and managing templates
+for prompts to be sent to LLMs. It's built on top of Jinja2 and offers both
+string-based and file-based templating.
+
+## String Templates
+
+The simplest way to use templates is with `JinjaStringTemplate`:
+
+```python
+# example: string_template.py
+from think.prompt import JinjaStringTemplate
+
+template = JinjaStringTemplate()
+prompt = template("Hello, my name is {{ name }} and I'm {{ age }} years old.",
+                  name="Alice", age=30)
+print(prompt)  # Outputs: Hello, my name is Alice and I'm 30 years old.
+```
+
+## File Templates
+
+For more complex prompts, you can use file-based templates:
+
+```python
+# example: file_template.py
+from pathlib import Path
+from think.prompt import JinjaFileTemplate
+
+# Create a template file
+template_path = Path("my_template.txt")
+template_path.write_text("Hello, my name is {{ name }} and I'm {{ age }} years old.")
+
+# Use the template
+template = JinjaFileTemplate(template_path.parent)
+prompt = template("my_template.txt", name="Bob", age=25)
+print(prompt)  # Outputs: Hello, my name is Bob and I'm 25 years old.
+```
+
+## Multi-line Templates
+
+When working with multi-line templates, the `strip_block` function helps
+preserve the relative indentation while removing the overall indentation:
+
+```python
+# example: multiline_template.py
+from think.prompt import JinjaStringTemplate, strip_block
+
+template = JinjaStringTemplate()
+prompt_text = strip_block('''
+    System:
+        You are a helpful assistant.
+
+    User:
+        {{ question }}
+''')
+
+prompt = template(prompt_text, question="How does photosynthesis work?")
+print(prompt)
+```
+
+## Using with LLMs
+
+Templates integrate seamlessly with the Think LLM interface:
+
+```python
+# example: template_with_llm.py
+import asyncio
+from think import LLM, ask
+from think.prompt import JinjaStringTemplate
+
+llm = LLM.from_url("openai:///gpt-3.5-turbo")
+template = JinjaStringTemplate()
+
+async def main():
+    prompt = template("Write a {{ length }} poem about {{ topic }}.",
+                     length="short", topic="artificial intelligence")
+    response = await ask(llm, prompt)
+    print(response)
+
+asyncio.run(main())
+```
+
+See also:
+- [Basic LLM Use](#basic-llm-use) for using templates with LLMs
+- [Structured Outputs and Parsing](#structured-outputs-and-parsing) for combining templates with structured outputs
+"""
+
 from pathlib import Path
 from typing import Any, Optional
 

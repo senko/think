@@ -1,3 +1,119 @@
+"""
+# Tool Integration
+
+The `llm.tool` module provides functionality for creating and using tools with LLMs.
+Tools are functions that LLMs can call to perform actions or retrieve information
+during a conversation, enabling more interactive and capable AI assistants.
+
+## Basic Tool Usage
+
+```python
+# example: basic_tools.py
+import asyncio
+from think import LLM
+from think.llm.chat import Chat
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+def get_weather(location: str) -> str:
+    '''
+    Get the current weather for a location.
+
+    :param location: The city name or location to get weather for
+    :return: Current weather information
+    '''
+    # In a real app, this would call a weather API
+    return f"It's currently sunny and 22°C in {location}"
+
+async def travel_assistant():
+    chat = Chat("You are a helpful travel assistant.")
+    chat.user("What's the weather like in Paris?")
+
+    # Pass the tool to the LLM
+    response = await llm(chat, tools=[get_weather])
+    print(response)
+
+asyncio.run(travel_assistant())
+```
+
+## Multiple Tools
+
+You can provide multiple tools for the LLM to choose from:
+
+```python
+# example: multiple_tools.py
+import asyncio
+from datetime import datetime
+from think import LLM
+from think.llm.chat import Chat
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+def get_time() -> str:
+    '''Get the current time.'''
+    return datetime.now().strftime("%H:%M:%S")
+
+def calculate_age(birth_year: int) -> int:
+    '''
+    Calculate a person's age.
+
+    :param birth_year: The year of birth
+    :return: The calculated age
+    '''
+    current_year = datetime.now().year
+    return current_year - birth_year
+
+async def assistant_with_tools():
+    chat = Chat("You are a helpful assistant.")
+    chat.user("What time is it now? Also, how old is someone born in 1990?")
+
+    response = await llm(chat, tools=[get_time, calculate_age])
+    print(response)
+
+asyncio.run(assistant_with_tools())
+```
+
+## Tool Kits
+
+For organizing related tools:
+
+```python
+# example: tool_kit.py
+import asyncio
+from think import LLM
+from think.llm.chat import Chat
+from think.llm.tool import ToolKit
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+# Create a toolkit for math operations
+math_tools = ToolKit("math")
+
+@math_tools.tool
+def add(a: float, b: float) -> float:
+    '''Add two numbers.'''
+    return a + b
+
+@math_tools.tool
+def multiply(a: float, b: float) -> float:
+    '''Multiply two numbers.'''
+    return a * b
+
+async def math_assistant():
+    chat = Chat("You are a math assistant.")
+    chat.user("What is 25 + 17, and what is 8 * 9?")
+
+    response = await llm(chat, tools=math_tools)
+    print(response)
+
+asyncio.run(math_assistant())
+```
+
+See also:
+- [Agents](#agents) for building more complex tool-using systems
+- [Basic LLM Use](#basic-llm-use) for general LLM interaction
+"""
+
 from __future__ import annotations
 
 import re

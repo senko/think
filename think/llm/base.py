@@ -1,3 +1,78 @@
+"""
+# Core LLM Functionality
+
+The `llm.base` module provides the core functionality for interacting with large language models (LLMs).
+It defines the `LLM` class, which is the main entry point for sending requests to LLMs and processing
+their responses.
+
+## Basic Usage
+
+```python
+# example: basic_llm.py
+from think import LLM
+
+# Initialize an LLM using a URL-based configuration
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+# Create a simple chat
+from think.llm.chat import Chat
+chat = Chat("What is the capital of France?")
+
+# Get a response
+import asyncio
+response = asyncio.run(llm(chat))
+print(response)
+```
+
+## Model URL Format
+
+Think uses a URL-like format to specify the model to use:
+
+```
+provider://[api_key@][host[:port]]/model[?query]
+```
+
+- `provider` is the model provider (openai, anthropic, google, etc.)
+- `api-key` is the API key (optional if set via environment)
+- `host[:port]` is the server to use (optional, for local LLMs)
+- `model` is the name of the model to use
+
+Examples:
+- `openai:///gpt-4o-mini` (API key from OPENAI_API_KEY environment variable)
+- `anthropic://sk-my-key@/claude-3-opus-20240229` (explicit API key)
+- `openai://localhost:8080/wizard-mega` (custom server over HTTP)
+
+## Streaming
+
+For generating responses incrementally:
+
+```python
+# example: streaming.py
+import asyncio
+from think import LLM
+from think.llm.chat import Chat
+
+llm = LLM.from_url("anthropic:///claude-3-haiku-20240307")
+
+async def stream_response():
+    chat = Chat("Generate a short poem about programming")
+    async for chunk in llm.stream(chat):
+        print(chunk, end="", flush=True)
+    print()
+
+asyncio.run(stream_response())
+```
+
+## Error Handling
+
+The LLM class throws specific exceptions for different error cases:
+- `ConfigError`: Configuration errors (invalid URL, missing API key)
+- `BadRequestError`: Invalid requests (e.g., inappropriate content)
+- Other standard exceptions like `ConnectionError`, `TimeoutError`
+
+See [Supported Providers](#supported-providers) for provider-specific information.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

@@ -1,3 +1,95 @@
+"""
+# RAG Base Functionality
+
+Retrieval-Augmented Generation (RAG) enhances LLM responses by incorporating relevant information
+from external sources. The `rag.base` module provides the core abstractions for building
+RAG systems with Think.
+
+## Basic RAG Usage
+
+```python
+# example: basic_rag.py
+import asyncio
+from think import LLM
+from think.rag.base import RAG, RagDocument
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+rag = RAG.for_provider("txtai")(llm)
+
+async def index_and_query():
+    # Step 1: Add documents to the RAG system
+    documents = [
+        RagDocument(id="doc1", text="Paris is the capital of France and known for the Eiffel Tower."),
+        RagDocument(id="doc2", text="London is the capital of the United Kingdom."),
+        RagDocument(id="doc3", text="Rome is the capital of Italy and home to the Colosseum.")
+    ]
+    await rag.add_documents(documents)
+
+    # Step 2: Query the RAG system
+    result = await rag("What are some European capitals and their landmarks?")
+    print(result)
+
+asyncio.run(index_and_query())
+```
+
+## Available RAG Providers
+
+Think supports multiple vector database backends:
+
+- **TxtAI**: Simple in-memory vector database (`"txtai"`)
+- **ChromaDB**: Persistent document storage (`"chroma"`)
+- **Pinecone**: Scalable cloud vector database (`"pinecone"`)
+
+## Customizing RAG Behavior
+
+You can customize the retrieval process by extending the base RAG classes:
+
+```python
+# example: custom_rag.py
+import asyncio
+from think import LLM
+from think.rag.base import RAG, RagDocument
+from think.rag.txtai_rag import TxtAIRag
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class CustomRag(TxtAIRag):
+    '''Custom RAG implementation with specialized prompting.'''
+
+    async def query_prompt(self, query: str, context: str) -> str:
+        '''Override the default prompt template.'''
+        return f'''
+        Based on the following context:
+
+        {context}
+
+        Please answer this question: {query}
+
+        If the context doesn't contain relevant information, please say so.
+        '''
+
+async def custom_rag_demo():
+    rag = CustomRag(llm)
+
+    # Add documents
+    documents = [
+        RagDocument(id="doc1", text="Neural networks are a class of machine learning models."),
+        RagDocument(id="doc2", text="Transformers revolutionized natural language processing."),
+    ]
+    await rag.add_documents(documents)
+
+    # Query
+    result = await rag("How do neural networks work?")
+    print(result)
+
+asyncio.run(custom_rag_demo())
+```
+
+See also:
+- [RAG Evaluation](#rag-retrieval-augmented-generation) for benchmarking RAG systems
+- [Tool Use](#tool-use) for integrating RAG with other tools
+"""
+
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass

@@ -1,3 +1,128 @@
+"""
+# Building Agents
+
+The `agent` module provides classes and utilities for building autonomous AI agents
+that can interact with users, use tools, access information, and perform tasks over time.
+
+## Basic Agent
+
+```python
+# example: simple_agent.py
+import asyncio
+from think import LLM
+from think.agent import BaseAgent, tool
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class WeatherAgent(BaseAgent):
+    '''You are a helpful weather assistant.'''
+
+    @tool
+    def get_current_temperature(self, city: str) -> float:
+        '''Get the current temperature for a city.'''
+        # In a real app, this would call a weather API
+        temperatures = {"New York": 22.5, "London": 15.0, "Tokyo": 26.8}
+        return temperatures.get(city, 20.0)  # Default temperature if city not found
+
+    @tool
+    def convert_celsius_to_fahrenheit(self, celsius: float) -> float:
+        '''Convert Celsius to Fahrenheit.'''
+        return (celsius * 9/5) + 32
+
+async def main():
+    agent = WeatherAgent(llm)
+    await agent.run("What's the temperature in London? Can you also convert it to Fahrenheit?")
+
+asyncio.run(main())
+```
+
+## Agents with RAG
+
+Agents can be integrated with Retrieval-Augmented Generation (RAG) systems:
+
+```python
+# example: rag_agent.py
+import asyncio
+from think import LLM
+from think.agent import BaseAgent, tool
+from think.rag.base import RAG, RagDocument
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class KnowledgeAgent(BaseAgent):
+    '''You are a helpful assistant with access to a knowledge base.'''
+
+    def __init__(self, llm: LLM):
+        super().__init__(llm)
+        # Initialize RAG system
+        self.rag = RAG.for_provider("txtai")(llm)
+
+    async def setup(self):
+        '''Initialize the knowledge base.'''
+        documents = [
+            RagDocument(id="doc1", text="The speed of light is approximately 299,792,458 meters per second."),
+            RagDocument(id="doc2", text="Water boils at 100 degrees Celsius at standard pressure."),
+            RagDocument(id="doc3", text="The Earth orbits the Sun at an average distance of 149.6 million kilometers.")
+        ]
+        await self.rag.add_documents(documents)
+
+    @tool
+    async def search_knowledge(self, query: str) -> str:
+        '''Search the knowledge base for information.'''
+        return await self.rag(query)
+
+async def main():
+    agent = KnowledgeAgent(llm)
+    await agent.setup()
+    await agent.run("What is the speed of light? And what is the boiling point of water?")
+
+asyncio.run(main())
+```
+
+## Interactive Agents
+
+Agents can maintain ongoing conversations with users:
+
+```python
+# example: interactive_agent.py
+import asyncio
+from datetime import datetime
+from think import LLM
+from think.agent import BaseAgent, tool
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class ChatbotAgent(BaseAgent):
+    '''You are a friendly and helpful assistant.'''
+
+    @tool
+    def get_current_time(self) -> str:
+        '''Get the current time.'''
+        return datetime.now().strftime("%H:%M:%S")
+
+    async def interact(self, response: str) -> str:
+        '''
+        Handle interaction with the user.
+
+        This method displays the agent's response and
+        gets the next input from the user.
+        '''
+        print(f"Agent: {response}")
+        return input("You: ").strip()
+
+async def main():
+    agent = ChatbotAgent(llm)
+    # Start with an initial greeting
+    await agent.run("Hello! How can I help you today?")
+
+asyncio.run(main())
+```
+
+See also:
+- [Tool Use](#tool-use) for more about integrating tools
+- [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation) for more about RAG
+"""
+
 from pathlib import Path
 from typing import Callable, Any, Optional, TypeVar
 from logging import getLogger

@@ -1,3 +1,121 @@
+"""
+# Chat/Conversation Manipulation
+
+The `llm.chat` module provides the core functionality for creating and managing chat conversations with LLMs.
+It defines the `Chat` class and related components for structuring messages, managing conversation history,
+and handling different content types (text, images, documents).
+
+## Basic Chat Usage
+
+```python
+# example: basic_chat.py
+from think import LLM
+from think.llm.chat import Chat
+import asyncio
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+async def simple_chat():
+    # Create a chat with a system prompt and user message
+    chat = Chat("You are a helpful assistant.")
+    chat.user("What is the capital of France?")
+
+    # Send to LLM and get response
+    response = await llm(chat)
+    print(response)
+
+    # Continue the conversation
+    chat.user("What's the population of that city?")
+    response = await llm(chat)
+    print(response)
+
+asyncio.run(simple_chat())
+```
+
+## Role-Based Messages
+
+Chat supports different message roles:
+
+```python
+# example: chat_roles.py
+from think import LLM
+from think.llm.chat import Chat
+import asyncio
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+async def role_based_chat():
+    chat = Chat()
+    chat.system("You are a helpful but sarcastic assistant.")
+    chat.user("Tell me about the solar system.")
+    chat.assistant("The solar system? Oh, just a small collection of cosmic bodies " +
+                   "orbiting a giant nuclear furnace we call the Sun. No big deal.")
+    chat.user("And what about Earth?")
+
+    response = await llm(chat)
+    print(response)
+
+asyncio.run(role_based_chat())
+```
+
+## Vision Capabilities
+
+For models that support vision, you can include images in your messages:
+
+```python
+# example: vision_chat.py
+from think import LLM
+from think.llm.chat import Chat
+import asyncio
+
+llm = LLM.from_url("openai:///gpt-4o-mini")  # Use a vision-capable model
+
+async def analyze_image():
+    # Load image data
+    with open("image.jpg", "rb") as f:
+        image_data = f.read()
+
+    # Create chat with image
+    chat = Chat().user("What's in this image?", images=[image_data])
+
+    response = await llm(chat)
+    print(response)
+
+asyncio.run(analyze_image())
+```
+
+## Document Handling
+
+For models supporting documents (like PDFs):
+
+```python
+# example: document_chat.py
+from think import LLM
+from think.llm.chat import Chat
+import asyncio
+
+llm = LLM.from_url("google:///gemini-1.5-pro")  # Use a document-capable model
+
+async def analyze_document():
+    # Load PDF data
+    with open("document.pdf", "rb") as f:
+        pdf_data = f.read()
+
+    # Create chat with document
+    chat = Chat().user("Summarize this document", documents=[pdf_data])
+
+    response = await llm(chat)
+    print(response)
+
+asyncio.run(analyze_document())
+```
+
+See also:
+- [Basic LLM Use](#basic-llm-use) for more about using Chat with LLMs
+- [Vision and Document Handling](#vision-and-document-handling) for advanced usage
+- [Tool Use](#tool-use) for using Chat with tools
+"""
+
 from __future__ import annotations
 
 import binascii

@@ -1,3 +1,68 @@
+"""
+# High-level API
+
+The `ai` module provides high-level functions and classes for interacting with LLMs,
+making it easier to perform common tasks without dealing with the lower-level details.
+
+## Quick API Calls
+
+The `ask` function provides a simple way to get a response from an LLM:
+
+```python
+# example: ask_quick.py
+import asyncio
+from think import LLM, ask
+
+llm = LLM.from_url("openai:///gpt-3.5-turbo")
+
+async def main():
+    response = await ask(llm, "What is the capital of France?")
+    print(response)
+
+    # With template variables
+    response = await ask(llm, "Write a haiku about {{ topic }}", topic="autumn leaves")
+    print(response)
+
+asyncio.run(main())
+```
+
+## Structured Outputs with Pydantic
+
+The `LLMQuery` class makes it easy to get structured data from LLMs using Pydantic models:
+
+```python
+# example: structured_query.py
+import asyncio
+from think import LLM, LLMQuery
+
+llm = LLM.from_url("openai:///gpt-4o-mini")
+
+class WeatherForecast(LLMQuery):
+    '''
+    Provide a weather forecast for {{ city }} for today.
+    Include temperature in Celsius and conditions.
+    '''
+
+    temperature_celsius: float
+    conditions: str
+    humidity_percent: int
+    wind_speed_kmh: float
+
+async def main():
+    forecast = await WeatherForecast.run(llm, city="London")
+    print(f"Temperature: {forecast.temperature_celsius}°C")
+    print(f"Conditions: {forecast.conditions}")
+    print(f"Humidity: {forecast.humidity_percent}%")
+    print(f"Wind: {forecast.wind_speed_kmh} km/h")
+
+asyncio.run(main())
+```
+
+See also:
+- [Basic LLM Use](#basic-llm-use) for more detailed LLM interaction
+- [Structured Outputs and Parsing](#structured-outputs-and-parsing) for advanced parsing options
+"""
+
 from json import dumps
 
 from pydantic import BaseModel
