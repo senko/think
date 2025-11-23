@@ -115,7 +115,7 @@ from think import LLM
 import asyncio
 
 # Connect to local Ollama server
-llm = LLM.from_url("ollama://localhost:11434/llama3")
+llm = LLM.from_url("ollama://localhost:11434/qwen3:8b")
 
 async def main():
     response = await llm("What is artificial intelligence?")

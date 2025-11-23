@@ -193,6 +193,8 @@ class OllamaClient(LLM):
                 raise ConfigError(f"Model not found: {err.error}") from err
             else:
                 raise BadRequestError(f"Bad request: {err.error}") from err
+        except ValueError as err:
+            raise BadRequestError(f"Invalid message structure: {err}") from err
         except AttributeError as err:
             raise BadRequestError(f"Bad request: {err}") from err
 
@@ -229,5 +231,7 @@ class OllamaClient(LLM):
                 raise ConfigError(f"Model not found: {err.error}") from err
             else:
                 raise BadRequestError(f"Bad request: {err.error}") from err
+        except ValueError as err:
+            raise BadRequestError(f"Invalid message structure: {err}") from err
         except AttributeError as err:
             raise BadRequestError(f"Bad request: {err}") from err
