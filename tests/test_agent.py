@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel
 
-from think.agent import BaseAgent, RAGMixin, SimpleRAGAgent, tool
+from think.agent import BaseAgent, RagMixin, SimpleRagAgent, tool
 from think.llm.base import LLM
 from think.llm.chat import Role
 from think.llm.tool import ToolKit
@@ -377,7 +377,7 @@ class TestBaseAgent:
         mock_llm.assert_called_once()
 
 
-class TestRAGMixin:
+class TestRagMixin:
     @pytest.fixture
     def mock_llm(self):
         return AsyncMock(spec=LLM)
@@ -389,7 +389,7 @@ class TestRAGMixin:
         return rag
 
     def test_rag_init_single_source(self, mock_llm, mock_rag):
-        class TestAgent(RAGMixin, BaseAgent):
+        class TestAgent(RagMixin, BaseAgent):
             """"""
 
         agent = TestAgent(mock_llm)
@@ -402,7 +402,7 @@ class TestRAGMixin:
         mock_rag1 = AsyncMock()
         mock_rag2 = AsyncMock()
 
-        class TestAgent(RAGMixin, BaseAgent):
+        class TestAgent(RagMixin, BaseAgent):
             """"""
 
         agent = TestAgent(mock_llm)
@@ -413,7 +413,7 @@ class TestRAGMixin:
         assert "lookup_person" in agent.toolkit.tools
 
     def test_rag_init_updates_docstring(self, mock_llm, mock_rag):
-        class TestAgent(RAGMixin, BaseAgent):
+        class TestAgent(RagMixin, BaseAgent):
             """Original docstring"""
 
         agent = TestAgent(mock_llm)
@@ -423,7 +423,7 @@ class TestRAGMixin:
         assert "Original docstring" in agent.__doc__  # type: ignore
 
 
-class TestSimpleRAGAgent:
+class TestSimpleRagAgent:
     @pytest.fixture
     def mock_llm(self):
         return AsyncMock(spec=LLM)
@@ -435,31 +435,31 @@ class TestSimpleRAGAgent:
         return rag
 
     def test_init_with_rag_name(self, mock_llm, mock_rag):
-        class TestRAGAgent(SimpleRAGAgent):
+        class TestRagAgent(SimpleRagAgent):
             """Test RAG agent"""
 
             rag_name = "movie"
 
-        agent = TestRAGAgent(mock_llm, mock_rag)
+        agent = TestRagAgent(mock_llm, mock_rag)
 
         assert agent.rag_sources == {"movie": mock_rag}
         assert "lookup_movie" in agent.toolkit.tools
 
     def test_init_without_rag_name_raises_error(self, mock_llm, mock_rag):
-        class TestRAGAgent(SimpleRAGAgent):
+        class TestRagAgent(SimpleRagAgent):
             """Test RAG agent"""  # No rag_name defined
 
         with pytest.raises(ValueError, match="rag_name must be set"):
-            TestRAGAgent(mock_llm, mock_rag)
+            TestRagAgent(mock_llm, mock_rag)
 
     def test_init_with_empty_rag_name_raises_error(self, mock_llm, mock_rag):
-        class TestRAGAgent(SimpleRAGAgent):
+        class TestRagAgent(SimpleRagAgent):
             """Test RAG agent"""
 
             rag_name = ""
 
         with pytest.raises(ValueError, match="rag_name must be set"):
-            TestRAGAgent(mock_llm, mock_rag)
+            TestRagAgent(mock_llm, mock_rag)
 
 
 class TestAgentIntegration:
