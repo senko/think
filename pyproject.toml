@@ -3,9 +3,9 @@ name = "think-llm"
 version = "0.0.10"
 description = "Create programs that think, using LLMs."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2.9.2",
+    "pydantic>=2.12.4",
     "jinja2>=3.1.2",
     "httpx>=0.27.2",
     "litellm>=1.75.7",
@@ -18,24 +18,24 @@ keywords = ["ai", "llm", "rag", "agents"]
 
 [project.optional-dependencies]
 openai = ["openai>=1.53.0"]
-anthropic = ["anthropic>=0.37.1"]
-gemini = ["google-generativeai>=0.8.3"]
-groq = ["groq>=0.12.0"]
-ollama = ["ollama>=0.3.3"]
-bedrock = ["aioboto3>=13.2.0"]
-txtai = ["txtai>=8.1.0"]
-chromadb = ["chromadb>=0.6.2"]
-pinecone = ["pinecone>=5.4.2"]
+anthropic = ["anthropic>=0.74.1"]
+gemini = ["google-generativeai>=0.8.5"]
+groq = ["groq>=0.36.0"]
+ollama = ["ollama>=0.6.1"]
+bedrock = ["aioboto3>=15.5.0"]
+txtai = ["txtai>=9.2.0"]
+chromadb = ["chromadb>=1.3.5"]
+pinecone = ["pinecone>=8.0.0"]
 all = [
     "openai>=1.53.0",
-    "anthropic>=0.37.1",
-    "google-generativeai>=0.8.3",
-    "groq>=0.12.0",
-    "ollama>=0.3.3",
-    "aioboto3>=13.2.0",
-    "txtai>=8.1.0",
-    "chromadb>=0.6.2",
-    "pinecone>=5.4.2",
+    "anthropic>=0.74.1",
+    "google-generativeai>=0.8.5",
+    "groq>=0.36.0",
+    "ollama>=0.6.1",
+    "aioboto3>=15.5.0",
+    "txtai>=9.2.0",
+    "chromadb>=1.3.5",
+    "pinecone>=8.0.0",
     "pinecone-client>=4.1.2",
 ]
 
@@ -57,23 +57,21 @@ exclude_lines = ["if TYPE_CHECKING:"]
 [tool.pyright]
 typeCheckingMode = "off"
 
-[tool.uv]
-dev-dependencies = [
-    "pytest-asyncio>=1.1.0",
+[dependency-groups]
+dev = [
+    "aioboto3>=15.5.0",
+    "anthropic>=0.74.1",
+    "chromadb>=1.3.5",
+    "coverage>=7.12.0",
+    "google-generativeai>=0.8.5",
+    "groq>=0.36.0",
+    "ollama>=0.6.1",
+    "pinecone>=8.0.0",
+    "pre-commit>=4.5.0",
+    "pytest>=9.0.1",
+    "pytest-asyncio>=1.3.0",
     "pytest-coverage>=0.0",
-    "pytest>=8.4.1",
-    "ty>=0.0.1a16",
-    "ruff>=0.9.6",
-    "pre-commit>=3.8.0",
-    "python-dotenv>=1.0.1",
-    "openai>=1.53.0",
-    "anthropic>=0.37.1",
-    "google-generativeai>=0.8.3",
-    "groq>=0.12.0",
-    "ollama>=0.3.3",
-    "txtai>=8.1.0",
-    "chromadb>=0.6.2",
-    "pinecone>=5.4.2",
-    "pinecone-client>=4.1.2",
-    "aioboto3>=13.2.0",
+    "ruff>=0.14.6",
+    "txtai>=9.2.0",
+    "ty>=0.0.1a27",
 ]
