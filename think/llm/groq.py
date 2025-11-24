@@ -172,7 +172,7 @@ class GroqClient(LLM):
                 model=self.model,
                 messages=messages,
                 temperature=NOT_GIVEN if temperature is None else temperature,
-                tools=adapter.spec or NOT_GIVEN,
+                tools=adapter.spec or NOT_GIVEN,  # type: ignore[arg-type]
                 max_tokens=max_tokens,
             )
         except AuthenticationError as err:

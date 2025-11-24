@@ -186,7 +186,7 @@ class OllamaClient(LLM):
                     num_predict=max_tokens,
                     temperature=temperature,
                 ),
-                tools=adapter.spec,
+                tools=adapter.spec,  # type: ignore[arg-type]
             )
         except ResponseError as err:
             if err.status_code == 404:

@@ -146,7 +146,7 @@ class LiteLLMAdapter(BaseAdapter):
 
     @staticmethod
     def text_content(
-        content: str | list[dict[str, str]],
+        content: str | list[dict[str, str]] | None,
     ) -> str | None:
         """Extract text content from OpenAI message content."""
         if content is None:
@@ -241,6 +241,8 @@ class LiteLLMAdapter(BaseAdapter):
 
         elif role == "system":
             text = self.text_content(message.get("content"))
+            if text is None:
+                raise ValueError(f"Missing content in system message: {message!r}")
             return Message.system(text)
 
         elif role == "user":

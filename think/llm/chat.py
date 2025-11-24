@@ -299,7 +299,7 @@ class ContentPart(BaseModel):
 
         :return: True if the image is an HTTP(S) URL
         """
-        return self.image and self.image.startswith(("http:", "https:"))
+        return bool(self.image and self.image.startswith(("http:", "https:")))
 
     @property
     def image_data(self) -> str | None:
@@ -310,7 +310,7 @@ class ContentPart(BaseModel):
 
         :return: Base64-encoded image data or None
         """
-        return _get_file_b64(self.image)
+        return _get_file_b64(self.image) if self.image else None
 
     @property
     def image_bytes(self) -> bytes | None:
@@ -331,7 +331,7 @@ class ContentPart(BaseModel):
 
         :return: MIME type of the image or None
         """
-        return _get_file_mime_type(self.image)
+        return _get_file_mime_type(self.image) if self.image else None
 
     @field_validator("document", mode="before")
     @classmethod
@@ -346,7 +346,7 @@ class ContentPart(BaseModel):
 
         :return: True if the document is an HTTP(S) URL
         """
-        return self.document and self.document.startswith(("http:", "https:"))
+        return bool(self.document and self.document.startswith(("http:", "https:")))
 
     @property
     def document_data(self) -> str | None:
@@ -357,7 +357,7 @@ class ContentPart(BaseModel):
 
         :return: Base64-encoded document data or None
         """
-        return _get_file_b64(self.document)
+        return _get_file_b64(self.document) if self.document else None
 
     @property
     def document_bytes(self) -> bytes | None:
@@ -378,7 +378,7 @@ class ContentPart(BaseModel):
 
         :return: MIME type of the document or None
         """
-        return _get_file_mime_type(self.document)
+        return _get_file_mime_type(self.document) if self.document else None
 
 
 class Message(BaseModel):

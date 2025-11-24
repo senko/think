@@ -23,7 +23,7 @@ except ImportError as err:
     ) from err
 
 from .base import LLM, BadRequestError, BaseAdapter, ConfigError, PydanticResultT
-from .chat import Chat, ContentPart, ContentType, Message, Role, image_url, document_url
+from .chat import Chat, ContentPart, ContentType, Message, Role, document_url, image_url
 from .tool import ToolCall, ToolDefinition, ToolResponse
 
 log = getLogger(__name__)
@@ -151,7 +151,7 @@ class OpenAIAdapter(BaseAdapter):
 
     @staticmethod
     def text_content(
-        content: str | list[dict[str, str]],
+        content: str | list[dict[str, str]] | None,
     ) -> str | None:
         if content is None:
             return None
@@ -242,6 +242,8 @@ class OpenAIAdapter(BaseAdapter):
 
         elif role == "system":
             text = self.text_content(message.get("content"))
+            if text is None:
+                raise ValueError("Missing content in system message: %r", message)
             return Message.system(text)
 
         elif role == "user":
@@ -336,16 +338,16 @@ class OpenAIClient(LLM):
                 response = await self.client.beta.chat.completions.parse(
                     model=self.model,
                     messages=messages,
-                    temperature=NOT_GIVEN if temperature is None else temperature,
-                    tools=adapter.spec or NOT_GIVEN,
+                    temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore[arg-type]
+                    tools=adapter.spec or NOT_GIVEN,  # type: ignore[arg-type]
                     response_format=response_format,
-                    max_completion_tokens=max_tokens or NOT_GIVEN,
+                    max_completion_tokens=max_tokens or NOT_GIVEN,  # type: ignore[arg-type]
                 )
             else:
                 response = await self.client.chat.completions.create(
                     model=self.model,
                     messages=messages,
-                    temperature=NOT_GIVEN if temperature is None else temperature,
+                    temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore
                     tools=adapter.spec or NOT_GIVEN,
                     max_completion_tokens=max_tokens or NOT_GIVEN,
                 )
@@ -378,7 +380,7 @@ class OpenAIClient(LLM):
             ] = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=temperature,
+                temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore
                 stream=True,
                 max_completion_tokens=max_tokens or NOT_GIVEN,
             )

@@ -360,7 +360,7 @@ class ToolKit:
 
     def generate_tool_spec(
         self,
-        formatter: Callable[[list[ToolDefinition]], dict],
+        formatter: Callable[[ToolDefinition], dict],
     ) -> list[dict]:
         """Generate tool specifications to pass to the LLM."""
         return [formatter(t) for t in self.tools.values()]

@@ -235,7 +235,7 @@ class BaseAgent:
         # Add explicitly listed tools to toolkit
         if self.tools:
             for tool in self.tools:
-                self.add_tool(tool.__name__, tool)
+                self.add_tool(getattr(tool, "__name__", "tool"), tool)
 
         # Prepare the system message
         if isinstance(system, Path):
@@ -243,11 +243,11 @@ class BaseAgent:
                 raise ValueError(
                     f"System prompt file {system} does not exist or is not a file."
                 )
-            tpl = JinjaFileTemplate(system.parent)
+            tpl = JinjaFileTemplate(str(system.parent))
             system_msg = tpl(system.name, **kwargs)
         elif isinstance(system, str):
             system_msg = system
-        elif system is None and self.__doc__.strip():
+        elif system is None and self.__doc__ and self.__doc__.strip():
             tpl = JinjaStringTemplate()
             system_msg = tpl(self.__doc__, **kwargs)
         else:
@@ -381,6 +381,8 @@ class RagMixin:
         """
         self.rag_sources = rag_sources
 
+        assert self.__doc__ is not None
+
         for name, rag in rag_sources.items():
 
             def lookup_func(query):
@@ -397,7 +399,7 @@ class RagMixin:
             lookup_func.__name__ = "lookup_" + name
 
             self.__doc__ += "\n\nWhen asked about {name}, use the provided tool `lookup_{name}` to look it up."
-            self.add_tool(lookup_func.__name__, lookup_func)
+            self.add_tool(lookup_func.__name__, lookup_func)  # type: ignore[attr-defined]
 
 
 class SimpleRagAgent(RagMixin, BaseAgent):

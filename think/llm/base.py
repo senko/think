@@ -107,7 +107,7 @@ class BaseAdapter(ABC):
     of the API responses into the format expected by the LLM.
     """
 
-    toolkit: ToolKit
+    toolkit: ToolKit | None
 
     def __init__(self, toolkit: ToolKit | None = None):
         """
@@ -131,7 +131,7 @@ class BaseAdapter(ABC):
         pass
 
     @property
-    def spec(self) -> dict | None:
+    def spec(self) -> list[dict] | None:
         """
         Generate the provider-specific tool specification for all the
         tools passed to the LLM.
@@ -479,7 +479,7 @@ class LLM(ABC):
                     message.parsed = JSONParser(spec=parser)(text)
                 else:
                     message.parsed = parser(text)
-                return message.parsed
+                return message.parsed  # type: ignore[return-value]
 
             except (JSONDecodeError, ValidationError, ValueError) as err:
                 log.debug(f"Error parsing response '{text}': {err}")
@@ -529,7 +529,7 @@ class LLM(ABC):
         self,
         chat: Chat,
         message: Message,
-        toolkit: ToolKit,
+        toolkit: ToolKit | None,
     ) -> tuple[str, list[ToolResponse]]:
         """
         Process the assistant response message - internal implementation.
@@ -620,12 +620,13 @@ class LLM(ABC):
         text = ""
 
         try:
+            # Type-checker workaround: object async_generator can't be used in 'await' expression
             async for chunk in self._internal_stream(
                 chat,
                 adapter,
                 temperature,
                 max_tokens,
-            ):
+            ):  # type:ignore
                 text += chunk
                 yield chunk
         except ConfigError as err:
