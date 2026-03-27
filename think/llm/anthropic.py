@@ -214,8 +214,9 @@ class AnthropicClient(LLM):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        **kwargs,
     ):
-        super().__init__(model, api_key=api_key, base_url=base_url)
+        super().__init__(model, api_key=api_key, base_url=base_url, **kwargs)
         self.client = AsyncAnthropic(api_key=api_key, base_url=base_url)
 
     async def _internal_call(
@@ -239,6 +240,7 @@ class AnthropicClient(LLM):
                 tools=adapter.spec or NOT_GIVEN,
                 max_tokens=max_tokens,
                 system=system_message,
+                **self.extra_params,
             )
         except AuthenticationError as err:
             raise ConfigError(f"Authentication error: {err.message}") from err
@@ -272,6 +274,7 @@ class AnthropicClient(LLM):
                 stream=True,
                 system=system_message,
                 max_tokens=max_tokens,
+                **self.extra_params,
             )
         except AuthenticationError as err:
             raise ConfigError(f"Authentication error: {err.message}") from err

@@ -319,8 +319,9 @@ class OpenAIClient(LLM):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        **kwargs,
     ):
-        super().__init__(model, api_key=api_key, base_url=base_url)
+        super().__init__(model, api_key=api_key, base_url=base_url, **kwargs)
         self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def _internal_call(
@@ -342,6 +343,7 @@ class OpenAIClient(LLM):
                     tools=adapter.spec or NOT_GIVEN,  # type: ignore[arg-type]
                     response_format=response_format,
                     max_completion_tokens=max_tokens or NOT_GIVEN,  # type: ignore[arg-type]
+                    **self.extra_params,
                 )
             else:
                 response = await self.client.chat.completions.create(
@@ -350,6 +352,7 @@ class OpenAIClient(LLM):
                     temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore
                     tools=adapter.spec or NOT_GIVEN,
                     max_completion_tokens=max_tokens or NOT_GIVEN,
+                    **self.extra_params,
                 )
         except AuthenticationError as err:
             raise ConfigError(f"Authentication error: {err.message}") from err
@@ -383,6 +386,7 @@ class OpenAIClient(LLM):
                 temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore
                 stream=True,
                 max_completion_tokens=max_tokens or NOT_GIVEN,
+                **self.extra_params,
             )
         except AuthenticationError as err:
             raise ConfigError(f"Authentication error: {err.message}") from err

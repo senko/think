@@ -41,6 +41,7 @@ Examples:
 - `openai:///gpt-5-nano` (API key from OPENAI_API_KEY environment variable)
 - `anthropic://sk-my-key@/claude-3-opus-20240229` (explicit API key)
 - `openai://localhost:8080/wizard-mega` (custom server over HTTP)
+- `openai:///gpt-4o?service_tier=flex` (extra parameters passed to the API)
 
 ## Streaming
 
@@ -304,6 +305,14 @@ class LLM(ABC):
 
         Note that if the base URL is provided, the model must be passed
         as a query parameter.
+
+        Query parameters (other than ``model``) are passed through as extra
+        keyword arguments to the underlying provider API calls. For example,
+        ``openai:///gpt-4o?service_tier=flex`` passes ``service_tier="flex"``
+        to OpenAI's ``chat.completions.create()``.
+
+        Note: query parameter values are always strings. For parameters that
+        require numeric types, use ``LLM.for_provider()`` directly.
         """
         result = urlparse(url)
         query = parse_qs(result.query) if result.query else {}

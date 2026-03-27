@@ -219,11 +219,11 @@ class BedrockClient(LLM):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
-        **kwargs: str,
+        **kwargs,
     ):
-        super().__init__(model, api_key=api_key, base_url=base_url)
+        region = kwargs.pop("region", None)
+        super().__init__(model, api_key=api_key, base_url=base_url, **kwargs)
 
-        region = kwargs.get("region")
         if region is None:
             raise ValueError("AWS Bedrock client requires a region to be specified")
 
@@ -259,17 +259,18 @@ class BedrockClient(LLM):
 
         async with self.session.client("bedrock-runtime") as client:
             try:
-                kwargs = {
+                call_params = {
                     "modelId": self.model,
                     "messages": messages,
                     "system": system_block,
                 }
                 if cfg:
-                    cfg["inferenceConfig"] = cfg
+                    call_params["inferenceConfig"] = cfg
                 if adapter.spec:
-                    kwargs["toolConfig"] = adapter.spec
+                    call_params["toolConfig"] = adapter.spec
+                call_params.update(self.extra_params)
 
-                raw_message = await client.converse(**kwargs)
+                raw_message = await client.converse(**call_params)
             except (NoCredentialsError, EndpointConnectionError) as err:
                 raise ConfigError(err.fmt) from err
             except ClientError as err:
@@ -314,6 +315,7 @@ class BedrockClient(LLM):
                     messages=messages,
                     system=system_block,
                     inferenceConfig=cfg,
+                    **self.extra_params,
                 )
                 stream = response.get("stream")
 

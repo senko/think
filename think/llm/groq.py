@@ -153,8 +153,9 @@ class GroqClient(LLM):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        **kwargs,
     ):
-        super().__init__(model, api_key=api_key, base_url=base_url)
+        super().__init__(model, api_key=api_key, base_url=base_url, **kwargs)
         self.client = AsyncGroq(api_key=api_key, base_url=base_url)
 
     async def _internal_call(
@@ -174,6 +175,7 @@ class GroqClient(LLM):
                 temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore[arg-type]
                 tools=adapter.spec or NOT_GIVEN,  # type: ignore[arg-type]
                 max_tokens=max_tokens,
+                **self.extra_params,
             )
         except AuthenticationError as err:
             raise ConfigError(f"Authentication error: {err.message}") from err
@@ -204,6 +206,7 @@ class GroqClient(LLM):
                 temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore[arg-type]
                 stream=True,
                 max_tokens=max_tokens,
+                **self.extra_params,
             )
         except AuthenticationError as err:
             raise ConfigError(f"Authentication error: {err.message}") from err

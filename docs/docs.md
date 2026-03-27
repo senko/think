@@ -117,6 +117,7 @@ Examples:
 - `openai:///gpt-5-nano` (API key from OPENAI_API_KEY environment variable)
 - `anthropic://sk-my-key@/claude-3-opus-20240229` (explicit API key)
 - `openai://localhost:8080/wizard-mega` (custom server over HTTP)
+- `openai:///gpt-4o?service_tier=flex` (extra parameters passed to the API)
 
 ## Streaming
 
@@ -366,6 +367,30 @@ async def main():
     print(response)
 
 asyncio.run(main())
+```
+
+## Extra Parameters
+
+Query parameters in the model URL (other than `model`) are passed through as extra
+keyword arguments to the underlying provider API calls:
+
+```python
+# example: extra_params.py
+from think import LLM
+
+# OpenAI with service tier
+llm = LLM.from_url("openai:///gpt-4o?service_tier=flex")
+
+# Bedrock with region (required)
+llm = LLM.from_url("bedrock:///anthropic.claude-3-sonnet-20240229-v1:0?region=us-east-1")
+```
+
+Note: query parameter values are always strings. For parameters that require numeric
+types, use `LLM.for_provider()` directly:
+
+```python
+client_class = LLM.for_provider("openai")
+llm = client_class("gpt-4o", timeout=30)
 ```
 
 See also:
@@ -875,6 +900,7 @@ Examples:
 - `openai:///gpt-5-nano` (API key from OPENAI_API_KEY environment variable)
 - `anthropic://sk-my-key@/claude-3-opus-20240229` (explicit API key)
 - `openai://localhost:8080/wizard-mega` (custom server over HTTP)
+- `openai:///gpt-4o?service_tier=flex` (extra parameters passed to the API)
 
 ## Streaming
 
@@ -1748,7 +1774,7 @@ LLM client for Anthropic Claude API.
 See `LLM` for more details.
 
 
-##### `AnthropicClient.__init__(self, model: str)`
+##### `AnthropicClient.__init__(self, model: str, **kwargs)`
 
 
 
@@ -1802,6 +1828,7 @@ Examples:
 - `openai:///gpt-5-nano` (API key from OPENAI_API_KEY environment variable)
 - `anthropic://sk-my-key@/claude-3-opus-20240229` (explicit API key)
 - `openai://localhost:8080/wizard-mega` (custom server over HTTP)
+- `openai:///gpt-4o?service_tier=flex` (extra parameters passed to the API)
 
 ## Streaming
 
@@ -1977,6 +2004,14 @@ Examples:
 Note that if the base URL is provided, the model must be passed
 as a query parameter.
 
+Query parameters (other than ``model``) are passed through as extra
+keyword arguments to the underlying provider API calls. For example,
+``openai:///gpt-4o?service_tier=flex`` passes ``service_tier="flex"``
+to OpenAI's ``chat.completions.create()``.
+
+Note: query parameter values are always strings. For parameters that
+require numeric types, use ``LLM.for_provider()`` directly.
+
 
 
 
@@ -2049,7 +2084,7 @@ LLM client for AWS Bedrock API.
 See `LLM` for more details.
 
 
-##### `BedrockClient.__init__(self, model: str, **kwargs: str)`
+##### `BedrockClient.__init__(self, model: str, **kwargs)`
 
 
 
@@ -2516,7 +2551,7 @@ LLM client for Google Gemini API.
 See `LLM` for more details.
 
 
-##### `GoogleClient.__init__(self, model: str)`
+##### `GoogleClient.__init__(self, model: str, **kwargs)`
 
 
 
@@ -2565,7 +2600,7 @@ for the Groq API reference.
 
 
 
-##### `GroqClient.__init__(self, model: str)`
+##### `GroqClient.__init__(self, model: str, **kwargs)`
 
 
 
@@ -2691,7 +2726,7 @@ LLM client for Ollama API server.
 See `LLM` for more details.
 
 
-##### `OllamaClient.__init__(self, model: str)`
+##### `OllamaClient.__init__(self, model: str, **kwargs)`
 
 
 
@@ -2762,7 +2797,7 @@ LLM client for OpenAI API.
 See `LLM` for more details.
 
 
-##### `OpenAIClient.__init__(self, model: str)`
+##### `OpenAIClient.__init__(self, model: str, **kwargs)`
 
 
 

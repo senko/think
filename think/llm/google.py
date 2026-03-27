@@ -197,8 +197,9 @@ class GoogleClient(LLM):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        **kwargs,
     ):
-        super().__init__(model, api_key=api_key, base_url=base_url)
+        super().__init__(model, api_key=api_key, base_url=base_url, **kwargs)
         genai.configure(api_key=api_key)
         self.client = genai.GenerativeModel(model)
 
@@ -220,6 +221,7 @@ class GoogleClient(LLM):
                 ),
                 stream=False,
                 tools=adapter.spec,
+                **self.extra_params,
             )
         except InvalidArgument as err:
             if "API_KEY" in err.reason:
@@ -251,6 +253,7 @@ class GoogleClient(LLM):
                     max_output_tokens=max_tokens,
                 ),
                 stream=True,
+                **self.extra_params,
             )
         except InvalidArgument as err:
             if "API_KEY" in err.reason:

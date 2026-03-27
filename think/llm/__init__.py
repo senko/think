@@ -145,6 +145,30 @@ async def main():
 asyncio.run(main())
 ```
 
+## Extra Parameters
+
+Query parameters in the model URL (other than `model`) are passed through as extra
+keyword arguments to the underlying provider API calls:
+
+```python
+# example: extra_params.py
+from think import LLM
+
+# OpenAI with service tier
+llm = LLM.from_url("openai:///gpt-4o?service_tier=flex")
+
+# Bedrock with region (required)
+llm = LLM.from_url("bedrock:///anthropic.claude-3-sonnet-20240229-v1:0?region=us-east-1")
+```
+
+Note: query parameter values are always strings. For parameters that require numeric
+types, use `LLM.for_provider()` directly:
+
+```python
+client_class = LLM.for_provider("openai")
+llm = client_class("gpt-4o", timeout=30)
+```
+
 See also:
 - [Basic LLM Use](#basic-llm-use) for more detailed usage
 - [Model URL](#model-url) format documentation

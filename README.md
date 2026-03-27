@@ -298,6 +298,12 @@ Examples:
 
 (Note that if the base URL is provided, the model must be passed as a query parameter.)
 
+Any additional query parameters are passed through to the underlying provider API calls
+as extra keyword arguments. For example:
+
+    - `openai:///gpt-4o?service_tier=flex` (passes `service_tier="flex"` to OpenAI)
+    - `bedrock:///anthropic.claude-3-sonnet-20240229-v1:0?region=us-east-1` (required for Bedrock)
+
 Using the URL format allows you to easily switch between different models and providers
 without changing your code, or using multiple models in the same program without
 hardcoding anything.

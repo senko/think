@@ -163,8 +163,9 @@ class OllamaClient(LLM):
         *,
         api_key: str | None = None,
         base_url: str | None = None,
+        **kwargs,
     ):
-        super().__init__(model, api_key=api_key, base_url=base_url)
+        super().__init__(model, api_key=api_key, base_url=base_url, **kwargs)
         self.client = AsyncClient(base_url)
 
     async def _internal_call(
@@ -187,6 +188,7 @@ class OllamaClient(LLM):
                     temperature=temperature,
                 ),
                 tools=adapter.spec,  # type: ignore[arg-type]
+                **self.extra_params,
             )
         except ResponseError as err:
             if err.status_code == 404:
@@ -218,6 +220,7 @@ class OllamaClient(LLM):
                     num_predict=max_tokens,
                     temperature=temperature,
                 ),
+                **self.extra_params,
             )
 
             async for chunk in stream:
