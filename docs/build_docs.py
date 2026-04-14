@@ -115,7 +115,7 @@ def get_function_signature(
 
 def extract_class_info(node: ast.ClassDef) -> Dict:
     """Extract information about a class from its AST node."""
-    class_info = {
+    class_info: Dict = {
         "name": node.name,
         "description": ast.get_docstring(node) or "",
         "methods": [],
@@ -144,7 +144,7 @@ def extract_function_info(node: ast.FunctionDef) -> Dict:
     }
 
 
-def process_module(file_path: Path, module_name: str = None) -> Dict:
+def process_module(file_path: Path, module_name: str | None = None) -> Dict:
     """Process a Python module to extract docstrings and API information."""
     with open(file_path, "r", encoding="utf-8") as f:
         module_ast = ast.parse(f.read())
@@ -152,7 +152,7 @@ def process_module(file_path: Path, module_name: str = None) -> Dict:
     if not module_name:
         module_name = file_path.stem
 
-    module_info = {
+    module_info: Dict = {
         "name": module_name,
         "description": extract_module_docstring(file_path) or "",
         "classes": [],
