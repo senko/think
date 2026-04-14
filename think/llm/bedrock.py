@@ -6,6 +6,7 @@ from typing import AsyncGenerator, Literal
 
 try:
     from aioboto3 import Session
+    from botocore.config import Config
     from botocore.exceptions import (
         ClientError,
         EndpointConnectionError,
@@ -246,6 +247,8 @@ class BedrockClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: BedrockAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         system_message, messages = adapter.dump_chat(chat)
@@ -257,7 +260,8 @@ class BedrockClient(LLM):
         if max_tokens is not None:
             cfg["maxTokens"] = max_tokens
 
-        async with self.session.client("bedrock-runtime") as client:
+        boto_config = Config(retries={"max_attempts": max_retries, "mode": "standard"})
+        async with self.session.client("bedrock-runtime", config=boto_config) as client:
             try:
                 call_params = {
                     "modelId": self.model,
@@ -298,6 +302,8 @@ class BedrockClient(LLM):
         adapter: BedrockAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         system_message, messages = adapter.dump_chat(chat)
         system_block = [{"text": system_message}] if system_message else None
@@ -308,7 +314,8 @@ class BedrockClient(LLM):
         if max_tokens is not None:
             cfg["maxTokens"] = max_tokens
 
-        async with self.session.client("bedrock-runtime") as client:
+        boto_config = Config(retries={"max_attempts": max_retries, "mode": "standard"})
+        async with self.session.client("bedrock-runtime", config=boto_config) as client:
             try:
                 response = await client.converse_stream(
                     modelId=self.model,

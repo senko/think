@@ -209,31 +209,36 @@ class GoogleClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: GoogleAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
-        try:
-            response = await self.client.generate_content_async(
-                messages,
-                generation_config=genai.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                ),
-                stream=False,
-                tools=adapter.spec,
-                **self.extra_params,
-            )
-        except InvalidArgument as err:
-            if "API_KEY" in err.reason:
-                msg = f"Authentication error: {err.message}"
-            else:
-                msg = f"Invalid argument: {err.message}"
-            raise ConfigError(msg) from err
-        except NotFound as err:
-            raise ConfigError(f"Unknown model: {err.message}") from err
-        except KeyError as err:
-            raise BadRequestError(f"Bad request: {err}") from err
 
+        async def _do_call():
+            try:
+                return await self.client.generate_content_async(
+                    messages,
+                    generation_config=genai.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens,
+                    ),
+                    stream=False,
+                    tools=adapter.spec,
+                    **self.extra_params,
+                )
+            except InvalidArgument as err:
+                if "API_KEY" in err.reason:
+                    msg = f"Authentication error: {err.message}"
+                else:
+                    msg = f"Invalid argument: {err.message}"
+                raise ConfigError(msg) from err
+            except NotFound as err:
+                raise ConfigError(f"Unknown model: {err.message}") from err
+            except KeyError as err:
+                raise BadRequestError(f"Bad request: {err}") from err
+
+        response = await self._retry(_do_call, max_retries=max_retries)
         return adapter.parse_message(response.to_dict()["candidates"][0]["content"])
 
     async def _internal_stream(
@@ -242,29 +247,36 @@ class GoogleClient(LLM):
         adapter: GoogleAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
 
-        try:
-            response = await self.client.generate_content_async(
-                messages,
-                generation_config=genai.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                ),
-                stream=True,
-                **self.extra_params,
-            )
-        except InvalidArgument as err:
-            if "API_KEY" in err.reason:
-                msg = f"Authentication error: {err.message}"
-            else:
-                msg = f"Invalid argument: {err.message}"
-            raise ConfigError(msg) from err
-        except NotFound as err:
-            raise ConfigError(f"Unknown model: {err.message}") from err
-        except KeyError as err:
-            raise BadRequestError(f"Bad request: {err}") from err
+        async def _do_call():
+            try:
+                return await self.client.generate_content_async(
+                    messages,
+                    generation_config=genai.GenerationConfig(
+                        temperature=temperature,
+                        max_output_tokens=max_tokens,
+                    ),
+                    stream=True,
+                    **self.extra_params,
+                )
+            except InvalidArgument as err:
+                if "API_KEY" in err.reason:
+                    msg = f"Authentication error: {err.message}"
+                else:
+                    msg = f"Invalid argument: {err.message}"
+                raise ConfigError(msg) from err
+            except NotFound as err:
+                raise ConfigError(f"Unknown model: {err.message}") from err
+            except KeyError as err:
+                raise BadRequestError(f"Bad request: {err}") from err
 
+        response = await self._retry(_do_call, max_retries=max_retries)
         async for chunk in response:
-            yield chunk.text
+            try:
+                yield chunk.text
+            except ValueError:
+                pass

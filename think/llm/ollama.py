@@ -174,31 +174,43 @@ class OllamaClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: OllamaAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
 
+        async def _do_call():
+            try:
+                return await self.client.chat(
+                    model=self.model,
+                    messages=messages,
+                    stream=False,
+                    options=Options(
+                        num_predict=max_tokens,
+                        temperature=temperature,
+                    ),
+                    tools=adapter.spec,  # type: ignore[arg-type]
+                    **self.extra_params,
+                )
+            except ResponseError as err:
+                # Map non-transient errors to non-retryable types so the retry
+                # wrapper short-circuits. 5xx errors are left as ResponseError
+                # so they get retried.
+                if err.status_code == 404:
+                    raise ConfigError(f"Model not found: {err.error}") from err
+                if err.status_code is not None and 400 <= err.status_code < 500:
+                    raise BadRequestError(f"Bad request: {err.error}") from err
+                raise
+            except ValueError as err:
+                raise BadRequestError(f"Invalid message structure: {err}") from err
+            except AttributeError as err:
+                raise BadRequestError(f"Bad request: {err}") from err
+
         try:
-            response = await self.client.chat(
-                model=self.model,
-                messages=messages,
-                stream=False,
-                options=Options(
-                    num_predict=max_tokens,
-                    temperature=temperature,
-                ),
-                tools=adapter.spec,  # type: ignore[arg-type]
-                **self.extra_params,
-            )
+            response = await self._retry(_do_call, max_retries=max_retries)
         except ResponseError as err:
-            if err.status_code == 404:
-                raise ConfigError(f"Model not found: {err.error}") from err
-            else:
-                raise BadRequestError(f"Bad request: {err.error}") from err
-        except ValueError as err:
-            raise BadRequestError(f"Invalid message structure: {err}") from err
-        except AttributeError as err:
-            raise BadRequestError(f"Bad request: {err}") from err
+            raise BadRequestError(f"Bad request: {err.error}") from err
 
         return adapter.parse_message(response.get("message", {}))
 
@@ -208,20 +220,36 @@ class OllamaClient(LLM):
         adapter: OllamaAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
 
+        async def _do_call():
+            try:
+                return await self.client.chat(
+                    model=self.model,
+                    messages=messages,
+                    stream=True,
+                    options=Options(
+                        num_predict=max_tokens,
+                        temperature=temperature,
+                    ),
+                    **self.extra_params,
+                )
+            except ResponseError as err:
+                if err.status_code == 404:
+                    raise ConfigError(f"Model not found: {err.error}") from err
+                if err.status_code is not None and 400 <= err.status_code < 500:
+                    raise BadRequestError(f"Bad request: {err.error}") from err
+                raise
+            except ValueError as err:
+                raise BadRequestError(f"Invalid message structure: {err}") from err
+            except AttributeError as err:
+                raise BadRequestError(f"Bad request: {err}") from err
+
         try:
-            stream = await self.client.chat(
-                model=self.model,
-                messages=messages,
-                stream=True,
-                options=Options(
-                    num_predict=max_tokens,
-                    temperature=temperature,
-                ),
-                **self.extra_params,
-            )
+            stream = await self._retry(_do_call, max_retries=max_retries)
 
             async for chunk in stream:
                 msg = chunk.get("message", {})
@@ -230,10 +258,11 @@ class OllamaClient(LLM):
                     yield chunk_text
 
         except ResponseError as err:
+            # Streaming errors surface during iteration, not the initial call,
+            # so they bypass the closure's mapping — apply the same logic here.
             if err.status_code == 404:
                 raise ConfigError(f"Model not found: {err.error}") from err
-            else:
-                raise BadRequestError(f"Bad request: {err.error}") from err
+            raise BadRequestError(f"Bad request: {err.error}") from err
         except ValueError as err:
             raise BadRequestError(f"Invalid message structure: {err}") from err
         except AttributeError as err:

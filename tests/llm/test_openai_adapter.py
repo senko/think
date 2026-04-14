@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from tests.llm.test_chat import (
@@ -8,7 +10,7 @@ from tests.llm.test_chat import (
     PDF_URI,
 )
 from think.llm.chat import Chat
-from think.llm.openai import OpenAIAdapter
+from think.llm.openai import OpenAIAdapter, OpenAIClient
 
 BASIC_OPENAI_MESSAGES = [
     {"role": "system", "content": "You're a friendly assistant"},
@@ -107,3 +109,32 @@ def test_adapter(chat, expected):
 
     chat2 = adapter.load_chat(messages)
     assert chat.messages == chat2.messages
+
+
+@pytest.mark.asyncio
+async def test_max_retries_forwarded_via_with_options():
+    """OpenAIClient should call client.with_options(max_retries=N) on each call."""
+    fake_message = MagicMock()
+    fake_message.model_dump.return_value = {
+        "role": "assistant",
+        "content": "Hi!",
+        "tool_calls": None,
+    }
+    fake_choice = MagicMock()
+    fake_choice.message = fake_message
+    fake_response = MagicMock()
+    fake_response.choices = [fake_choice]
+
+    scoped_client = MagicMock()
+    scoped_client.chat.completions.create = AsyncMock(return_value=fake_response)
+
+    with patch("think.llm.openai.AsyncOpenAI") as MockSDK:
+        sdk_instance = MockSDK.return_value
+        sdk_instance.with_options = MagicMock(return_value=scoped_client)
+
+        client = OpenAIClient(model="gpt-4o", api_key="fake")
+        chat = Chat("system").user("hi")
+        await client(chat, max_retries=5)
+
+        sdk_instance.with_options.assert_called_with(max_retries=5)
+        scoped_client.chat.completions.create.assert_called_once()

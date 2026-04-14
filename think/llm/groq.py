@@ -164,12 +164,16 @@ class GroqClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: GroqAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
 
+        client = self.client.with_options(max_retries=max_retries)
+
         try:
-            response: ChatCompletion = await self.client.chat.completions.create(
+            response: ChatCompletion = await client.chat.completions.create(  # type: ignore[no-matching-overload]
                 model=self.model,
                 messages=messages,
                 temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore[arg-type]
@@ -194,13 +198,17 @@ class GroqClient(LLM):
         adapter: GroqAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
+
+        client = self.client.with_options(max_retries=max_retries)
 
         try:
             stream: AsyncStream[
                 ChatCompletionChunk
-            ] = await self.client.chat.completions.create(  # type: ignore[no-matching-overload]
+            ] = await client.chat.completions.create(  # type: ignore[no-matching-overload]
                 model=self.model,
                 messages=messages,
                 temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore[arg-type]

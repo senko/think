@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from tests.llm.test_chat import (
@@ -8,7 +10,7 @@ from tests.llm.test_chat import (
     PDF_URI,
 )
 from think.llm.chat import Chat
-from think.llm.litellm import LiteLLMAdapter
+from think.llm.litellm import LiteLLMAdapter, LiteLLMClient
 
 # LiteLLM uses OpenAI-compatible format, so we reuse the same expected messages
 BASIC_LITELLM_MESSAGES = [
@@ -173,3 +175,27 @@ def test_error_handling():
 
     with pytest.raises(ValueError, match="Unsupported document MIME type"):
         adapter.dump_message(message)
+
+
+@pytest.mark.asyncio
+async def test_max_retries_passed_to_acompletion():
+    """LiteLLMClient should inject num_retries into acompletion call_params."""
+    fake_message = MagicMock()
+    fake_message.role = "assistant"
+    fake_message.content = "Hi!"
+    fake_message.tool_calls = None
+    fake_choice = MagicMock()
+    fake_choice.message = fake_message
+    fake_response = MagicMock()
+    fake_response.choices = [fake_choice]
+
+    with patch(
+        "think.llm.litellm.acompletion", new=AsyncMock(return_value=fake_response)
+    ) as mock_acompletion:
+        client = LiteLLMClient(model="gpt-4o-mini")
+        chat = Chat("system").user("hi")
+        await client(chat, max_retries=6)
+
+        mock_acompletion.assert_called_once()
+        call_kwargs = mock_acompletion.call_args.kwargs
+        assert call_kwargs["num_retries"] == 6

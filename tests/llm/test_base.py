@@ -5,7 +5,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from pydantic import BaseModel
 
-from think.llm.base import LLM, BaseAdapter, PydanticResultT
+from think.llm.base import (
+    LLM,
+    BadRequestError,
+    BaseAdapter,
+    ConfigError,
+    PydanticResultT,
+)
 from think.llm.chat import Chat, ContentPart, ContentType, Message, Role
 from think.llm.tool import ToolCall, ToolDefinition, ToolError
 
@@ -26,6 +32,8 @@ class MyClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: BaseAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         raise NotImplementedError()
@@ -36,6 +44,8 @@ class MyClient(LLM):
         adapter: BaseAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         raise NotImplementedError()
         yield  # Make it a generator
@@ -238,3 +248,88 @@ async def test_streaming():
     assert args.args[3] == 10  # max_tokens
 
     assert chat.messages[-1].content[0].text == original_message
+
+
+@pytest.mark.asyncio
+async def test_call_forwards_max_retries():
+    chat = Chat("system message").user("user message")
+    client = MyClient(api_key="fake-key", model="fake-model")
+    client._internal_call = AsyncMock(return_value=text_message("Hi!"))  # type: ignore
+
+    await client(chat, max_retries=7)
+
+    args = client._internal_call.call_args  # type: ignore
+    assert args.kwargs["max_retries"] == 7
+
+
+@pytest.mark.asyncio
+async def test_stream_forwards_max_retries():
+    chat = Chat("system message").user("user message")
+    client = MyClient(api_key="fake-key", model="fake-model")
+
+    async def do_stream():
+        yield "ok"
+
+    client._internal_stream = MagicMock(return_value=do_stream())  # type: ignore
+
+    async for _ in client.stream(chat, max_retries=4):
+        pass
+
+    args = client._internal_stream.call_args  # type: ignore
+    assert args.kwargs["max_retries"] == 4
+
+
+@pytest.mark.asyncio
+async def test_retry_succeeds_first_try():
+    fn = AsyncMock(return_value="ok")
+    result = await LLM._retry(fn, max_retries=3, backoff=0.0)
+    assert result == "ok"
+    assert fn.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_succeeds_after_retries():
+    calls = {"n": 0}
+
+    async def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise ConnectionError("transient")
+        return "ok"
+
+    result = await LLM._retry(flaky, max_retries=3, backoff=0.0)
+    assert result == "ok"
+    assert calls["n"] == 3
+
+
+@pytest.mark.asyncio
+async def test_retry_exhausts_and_raises():
+    async def always_fail():
+        raise ConnectionError("transient")
+
+    with pytest.raises(ConnectionError):
+        await LLM._retry(always_fail, max_retries=2, backoff=0.0)
+
+
+@pytest.mark.asyncio
+async def test_retry_short_circuits_on_config_error():
+    fn = AsyncMock(side_effect=ConfigError("bad creds"))
+    with pytest.raises(ConfigError):
+        await LLM._retry(fn, max_retries=5, backoff=0.0)
+    assert fn.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_short_circuits_on_bad_request_error():
+    fn = AsyncMock(side_effect=BadRequestError("bad input"))
+    with pytest.raises(BadRequestError):
+        await LLM._retry(fn, max_retries=5, backoff=0.0)
+    assert fn.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_retry_zero_means_one_attempt():
+    fn = AsyncMock(side_effect=ConnectionError("transient"))
+    with pytest.raises(ConnectionError):
+        await LLM._retry(fn, max_retries=0, backoff=0.0)
+    assert fn.call_count == 1

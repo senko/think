@@ -341,6 +341,8 @@ class LiteLLMClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: LiteLLMAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         """Make an async LLM call using litellm."""
@@ -350,6 +352,7 @@ class LiteLLMClient(LLM):
         call_params = {
             "model": self.model,
             "messages": messages,
+            "num_retries": max_retries,
         }
 
         if temperature is not None:
@@ -420,6 +423,8 @@ class LiteLLMClient(LLM):
         adapter: LiteLLMAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         """Make a streaming LLM call using litellm."""
         _, messages = adapter.dump_chat(chat)
@@ -429,6 +434,7 @@ class LiteLLMClient(LLM):
             "model": self.model,
             "messages": messages,
             "stream": True,
+            "num_retries": max_retries,
         }
 
         if temperature is not None:

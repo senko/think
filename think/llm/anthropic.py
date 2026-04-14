@@ -225,6 +225,8 @@ class AnthropicClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: AnthropicAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         if max_tokens is None:
@@ -232,8 +234,10 @@ class AnthropicClient(LLM):
 
         system_message, messages = adapter.dump_chat(chat)
 
+        client = self.client.with_options(max_retries=max_retries)
+
         try:
-            anthropic_message: AnthropicMessage = await self.client.messages.create(
+            anthropic_message: AnthropicMessage = await client.messages.create(
                 model=self.model,
                 messages=messages,
                 temperature=NOT_GIVEN if temperature is None else temperature,
@@ -259,15 +263,17 @@ class AnthropicClient(LLM):
         adapter: AnthropicAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         system_message, messages = adapter.dump_chat(chat)
         if max_tokens is None:
             max_tokens = 4096
 
+        client = self.client.with_options(max_retries=max_retries)
+
         try:
-            stream: AsyncStream[
-                RawMessageStreamEvent
-            ] = await self.client.messages.create(
+            stream: AsyncStream[RawMessageStreamEvent] = await client.messages.create(
                 model=self.model,
                 messages=messages,
                 temperature=NOT_GIVEN if temperature is None else temperature,

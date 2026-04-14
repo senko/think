@@ -330,13 +330,17 @@ class OpenAIClient(LLM):
         temperature: float | None,
         max_tokens: int | None,
         adapter: OpenAIAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         _, messages = adapter.dump_chat(chat)
 
+        client = self.client.with_options(max_retries=max_retries)
+
         try:
             if response_format:
-                response = await self.client.beta.chat.completions.parse(
+                response = await client.beta.chat.completions.parse(
                     model=self.model,
                     messages=messages,
                     temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore[arg-type]
@@ -346,7 +350,7 @@ class OpenAIClient(LLM):
                     **self.extra_params,
                 )
             else:
-                response = await self.client.chat.completions.create(
+                response = await client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore
@@ -374,13 +378,17 @@ class OpenAIClient(LLM):
         adapter: OpenAIAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         _, messages = adapter.dump_chat(chat)
+
+        client = self.client.with_options(max_retries=max_retries)
 
         try:
             stream: AsyncStream[
                 ChatCompletionChunk
-            ] = await self.client.chat.completions.create(
+            ] = await client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 temperature=NOT_GIVEN if temperature is None else temperature,  # type: ignore

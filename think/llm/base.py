@@ -76,11 +76,20 @@ See [Supported Providers](#supported-providers) for provider-specific informatio
 
 from __future__ import annotations
 
+import asyncio
 from abc import ABC, abstractmethod
 from json import JSONDecodeError
 from logging import getLogger
 from time import time
-from typing import TYPE_CHECKING, AsyncGenerator, Callable, TypeVar, cast, overload
+from typing import (
+    TYPE_CHECKING,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    TypeVar,
+    cast,
+    overload,
+)
 from urllib.parse import parse_qs, urlparse
 
 from pydantic import BaseModel, ValidationError
@@ -92,6 +101,7 @@ from .tool import ToolCall, ToolDefinition, ToolKit, ToolResponse
 
 CustomParserResultT = TypeVar("CustomParserResultT")
 PydanticResultT = TypeVar("PydanticResultT", bound=BaseModel)
+RetryResultT = TypeVar("RetryResultT")
 
 log = getLogger(__name__)
 
@@ -412,7 +422,12 @@ class LLM(ABC):
         :param tools: Optional tools/functions available to the model:
             - A ToolKit instance
             - A list of callables that take a string and return a string
-        :param max_retries: Maximum number of retries on failure
+        :param max_retries: Maximum number of retries on failure. Governs both
+            parser-error retries (re-prompting the model when JSON/Pydantic
+            parsing fails) and SDK transport retries on transient errors
+            (5xx responses, connection failures). For providers whose SDK
+            exposes a retry knob, this value is forwarded; for the rest it
+            drives the in-process retry wrapper (`LLM._retry`).
         :param max_steps: Maximum number of steps for tool use
         :param max_tokens: Optional maximum tokens in response
         :return: Either:
@@ -451,6 +466,7 @@ class LLM(ABC):
                 temperature,
                 max_tokens,
                 adapter,
+                max_retries=max_retries,
                 response_format=response_format,
             )
         except (ConfigError, BadRequestError) as err:
@@ -516,6 +532,8 @@ class LLM(ABC):
         temperature: float | None,
         max_tokens: int | None,
         adapter: BaseAdapter,
+        *,
+        max_retries: int,
         response_format: PydanticResultT | None = None,
     ) -> Message:
         """
@@ -528,6 +546,8 @@ class LLM(ABC):
         :param temperature: Optional sampling temperature (0-1)
         :param max_tokens: Optional maximum tokens in response
         :param adapter: The adapter to convert the chat to the provider format
+        :param max_retries: Number of retries to allow on transient errors;
+            forwarded to the underlying SDK or used by `LLM._retry`
         :param response_format: Optional Pydantic model to parse the response into
             (to be used only if the provider supports structured responses)
         :return: The response message from the provider
@@ -594,6 +614,8 @@ class LLM(ABC):
         adapter: BaseAdapter,
         temperature: float | None,
         max_tokens: int | None,
+        *,
+        max_retries: int,
     ) -> AsyncGenerator[str, None]:
         """
         Make a streaming LLM API call - internal implementation.
@@ -605,6 +627,9 @@ class LLM(ABC):
         :param adapter: The adapter to convert the chat to the provider format
         :param temperature: Optional sampling temperature (0-1)
         :param max_tokens: Optional maximum tokens in response
+        :param max_retries: Number of retries to allow on transient errors when
+            establishing the stream; only the connection establishment is
+            retried, not chunk consumption.
         :return: An async generator of response string chunks
         """
         pass
@@ -614,12 +639,15 @@ class LLM(ABC):
         chat: Chat,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        max_retries: int = 3,
     ) -> AsyncGenerator[str, None]:
         """Stream responses from the LLM model.
 
         :param chat: The chat conversation to process
         :param temperature: Optional sampling temperature (0-1)
         :param max_tokens: Optional maximum tokens in response
+        :param max_retries: Number of retries to allow on transient errors when
+            establishing the stream
         :return: An async generator of response string chunks
         """
         ...
@@ -635,6 +663,7 @@ class LLM(ABC):
                 adapter,
                 temperature,
                 max_tokens,
+                max_retries=max_retries,
             ):  # type:ignore
                 text += chunk
                 yield chunk
@@ -652,6 +681,48 @@ class LLM(ABC):
                     content=[ContentPart(type=ContentType.text, text=text)],
                 )
             )
+
+    @staticmethod
+    async def _retry(
+        fn: Callable[[], Awaitable[RetryResultT]],
+        *,
+        max_retries: int,
+        backoff: float = 1.0,
+        max_backoff: float = 30.0,
+    ) -> RetryResultT:
+        """
+        Run an async LLM call with exponential-backoff retries on transient errors.
+
+        Used by providers whose SDK does not expose a native retry knob.
+        Mirrors OpenAI/Anthropic SDK semantics: ``max_retries=N`` means up to
+        ``N`` retries on top of the initial attempt (``N+1`` total attempts).
+        ``ConfigError`` and ``BadRequestError`` are treated as non-transient
+        and re-raised immediately.
+
+        :param fn: Zero-arg async callable that performs the request.
+        :param max_retries: Maximum number of retries (excluding the initial
+            attempt). ``0`` disables retries.
+        :param backoff: Base delay (seconds) for exponential backoff.
+        :param max_backoff: Cap on the delay between retries (seconds).
+        """
+        for attempt in range(max_retries + 1):
+            try:
+                return await fn()
+            except (ConfigError, BadRequestError):
+                raise
+            except Exception as err:
+                if attempt >= max_retries:
+                    raise
+                delay = min(backoff * (2**attempt), max_backoff)
+                log.debug(
+                    "LLM call failed (attempt %d/%d): %s. Retrying in %.1fs",
+                    attempt + 1,
+                    max_retries + 1,
+                    err,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+        raise RuntimeError("unreachable")
 
     @staticmethod
     def _error_from_json_response(response: "httpx.Response") -> str:
